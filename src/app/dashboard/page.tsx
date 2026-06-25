@@ -24,18 +24,25 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-// Recharts components (import dynamically to avoid SSR/window issues in Next.js)
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  AreaChart,
-  Area
-} from 'recharts';
+import dynamic from 'next/dynamic';
+
+const RevenueChart = dynamic(() => import('@/components/dashboard/revenue-chart'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center">
+      <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  )
+});
+
+const BookingsChart = dynamic(() => import('@/components/dashboard/bookings-chart'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full flex items-center justify-center">
+      <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  )
+});
 
 export default function DashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -229,24 +236,7 @@ export default function DashboardPage() {
                   <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0c4a28" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#0c4a28" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f3" />
-                    <XAxis dataKey="name" stroke="#64746b" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#64746b" fontSize={10} tickLine={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8e5', fontSize: '11px' }}
-                      formatter={(value: any) => [`₹${value}`, 'Revenue']}
-                    />
-                    <Area type="monotone" dataKey="revenue" stroke="#0c4a28" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <RevenueChart data={chartData} />
               )}
             </div>
           </div>
@@ -262,18 +252,7 @@ export default function DashboardPage() {
                   <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f3" />
-                    <XAxis dataKey="name" stroke="#64746b" fontSize={10} tickLine={false} />
-                    <YAxis stroke="#64746b" fontSize={10} tickLine={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8e5', fontSize: '11px' }}
-                      formatter={(value: any) => [value, 'Bookings']}
-                    />
-                    <Bar dataKey="bookings" fill="#198754" radius={[6, 6, 0, 0]} maxBarSize={28} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <BookingsChart data={chartData} />
               )}
             </div>
           </div>

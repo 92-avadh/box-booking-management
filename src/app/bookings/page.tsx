@@ -1,10 +1,15 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import DashboardLayout from '@/components/layout/dashboard-layout';
+import dynamic from 'next/dynamic';
+
+const DotLottieReact = dynamic(
+  () => import('@lottiefiles/dotlottie-react').then((mod) => mod.DotLottieReact),
+  { ssr: false }
+);
 import { 
   getGrounds, 
   getCustomers, 
@@ -861,27 +866,36 @@ function BookingsContent() {
       : grounds.filter(g => g.id === selectedGroundFilter);
 
     return (
-      <div className="border border-border/85 rounded-2xl bg-card overflow-hidden shadow-sm text-left">
-        <div className="grid grid-cols-[100px_1fr] bg-muted/20 border-b border-border/80 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-          <div className="p-4 border-r border-border/80">Time</div>
-          <div className="grid" style={{ gridTemplateColumns: `repeat(${activeGrounds.length}, minmax(0, 1fr))` }}>
+      <div className="w-full overflow-x-auto rounded-2xl border border-border/85 bg-card shadow-sm text-left">
+        <div className="min-w-max">
+          {/* Header Row */}
+          <div 
+            className="grid bg-muted/20 border-b border-border/80 text-[10px] font-bold text-muted-foreground uppercase tracking-widest"
+            style={{ gridTemplateColumns: `100px repeat(${activeGrounds.length}, 140px)` }}
+          >
+            <div className="p-4 border-r border-border/80">Time</div>
             {activeGrounds.map(g => (
               <div key={g.id} className="p-4 text-center border-r border-border/80 last:border-r-0 font-bold">
                 {g.name} <span className="text-primary text-[9px] lowercase bg-accent px-1.5 py-0.5 rounded-md ml-1">₹{g.hourly_rate}/hr</span>
               </div>
             ))}
           </div>
-        </div>
 
-        <div className="divide-y divide-border/60">
-          {TIME_SLOTS.slice(0, -1).map((slot, index) => {
-            return (
-              <div key={slot} className="grid grid-cols-[100px_1fr] min-h-[64px] group">
-                {/* Time Label */}
-                <div className="py-4 px-5 border-r border-border/80 flex items-center text-xs font-semibold text-muted-foreground bg-muted/5">
-                  {formatSingleHourAMPM(slot)}
-                               {/* Grounds Grid */}
-                <div className="grid" style={{ gridTemplateColumns: `repeat(${activeGrounds.length}, minmax(0, 1fr))` }}>
+          {/* Time Slots Grid */}
+          <div className="divide-y divide-border/60">
+            {TIME_SLOTS.slice(0, -1).map((slot, index) => {
+              return (
+                <div 
+                  key={slot} 
+                  className="grid min-h-[140px] group"
+                  style={{ gridTemplateColumns: `100px repeat(${activeGrounds.length}, 140px)` }}
+                >
+                  {/* Time Label */}
+                  <div className="py-4 px-5 border-r border-border/80 flex items-center text-xs font-semibold text-muted-foreground bg-muted/5">
+                    {formatSingleHourAMPM(slot)}
+                  </div>
+                  
+                  {/* Grounds Grid Cells */}
                   {activeGrounds.map(ground => {
                     const booking = getBookingForSlot(ground.id, dateStr, slot);
                     const isStart = booking && booking.start_time === slot;
@@ -926,7 +940,7 @@ function BookingsContent() {
                               style={{ 
                                 // Dynamic height calculations for slot stretching
                                 height: `calc(${
-                                  (parseInt(booking.end_time.split(':')[0]) - parseInt(booking.start_time.split(':')[0])) * 64
+                                  (parseInt(booking.end_time.split(':')[0]) - parseInt(booking.start_time.split(':')[0])) * 140
                                 }px - 12px)`
                               }}
                             >
@@ -957,10 +971,9 @@ function BookingsContent() {
                     );
                   })}
                 </div>
-    </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -985,84 +998,97 @@ function BookingsContent() {
     const groundName = grounds.find(g => g.id === groundId)?.name || 'Ground';
 
     return (
-      <div className="border border-border/85 rounded-2xl bg-card overflow-hidden shadow-sm text-left">
-        <div className="bg-muted/10 p-3.5 border-b border-border text-center text-xs font-bold text-primary bg-accent/20">
-          Showing schedule for <span className="font-extrabold">{groundName}</span>
-        </div>
-        <div className="grid grid-cols-[80px_repeat(7,1fr)] bg-muted/20 border-b border-border/80 text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-          <div className="p-3 border-r border-border/80">Time</div>
-          {weekDates.map(date => {
-            const isToday = date.toDateString() === new Date().toDateString();
-            return (
-              <div key={date.toISOString()} className={`p-3 text-center border-r border-border/80 last:border-r-0 ${isToday ? 'bg-primary/5 text-primary font-extrabold' : ''}`}>
-                <p>{date.toLocaleDateString('en-US', { weekday: 'short' })}</p>
-                <p className="text-xs font-bold mt-0.5">{date.getDate()}</p>
-              </div>
-            );
-          })}
-        </div>
+      <div className="w-full overflow-x-auto rounded-2xl border border-border/85 bg-card shadow-sm text-left">
+        <div className="min-w-max">
+          <div className="bg-muted/10 p-3.5 border-b border-border text-center text-xs font-bold text-primary bg-accent/20">
+            Showing schedule for <span className="font-extrabold">{groundName}</span>
+          </div>
+          <div 
+            className="grid bg-muted/20 border-b border-border/80 text-[9px] font-bold text-muted-foreground uppercase tracking-widest text-center"
+            style={{ gridTemplateColumns: `80px repeat(7, 140px)` }}
+          >
+            <div className="p-3 border-r border-border/80">Time</div>
+            {weekDates.map(date => {
+              const isToday = date.toDateString() === new Date().toDateString();
+              return (
+                <div key={date.toISOString()} className={`p-3 text-center border-r border-border/80 last:border-r-0 ${isToday ? 'bg-primary/5 text-primary font-extrabold' : ''}`}>
+                  <p>{date.toLocaleDateString('en-US', { weekday: 'short' })}</p>
+                  <p className="text-xs font-bold mt-0.5">{date.getDate()}</p>
+                </div>
+              );
+            })}
+          </div>
 
-        <div className="divide-y divide-border/60">
-          {TIME_SLOTS.slice(0, -1).map((slot) => (
-            <div key={slot} className="grid grid-cols-[80px_repeat(7,1fr)] min-h-[50px] group">
-              <div className="py-3 px-4 border-r border-border/80 flex items-center text-xs font-semibold text-muted-foreground bg-muted/5">
-                {formatSingleHourAMPM(slot)}
-              </div>
-              {weekDates.map(date => {
-                const dateStr = getFormattedDate(date);
-                const booking = getBookingForSlot(groundId, dateStr, slot);
-                const isStart = booking && booking.start_time === slot;
+          <div className="divide-y divide-border/60">
+            {TIME_SLOTS.slice(0, -1).map((slot) => (
+              <div 
+                key={slot} 
+                className="grid min-h-[140px] group"
+                style={{ gridTemplateColumns: `80px repeat(7, 140px)` }}
+              >
+                <div className="py-3 px-4 border-r border-border/80 flex items-center text-xs font-semibold text-muted-foreground bg-muted/5">
+                  {formatSingleHourAMPM(slot)}
+                </div>
+                {weekDates.map(date => {
+                  const dateStr = getFormattedDate(date);
+                  const booking = getBookingForSlot(groundId, dateStr, slot);
+                  const isStart = booking && booking.start_time === slot;
 
-                let cardClass = '';
-                let derivedStatus = 'Booked';
+                  let cardClass = '';
+                  let derivedStatus = 'Booked';
 
-                if (booking) {
-                  derivedStatus = getBookingStatus(booking);
-                  if (derivedStatus === 'Completed') {
-                    cardClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
-                  } else if (derivedStatus === 'Running') {
-                    cardClass = 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse';
-                  } else if (derivedStatus === 'Cancelled') {
-                    cardClass = 'bg-red-50 text-red-800 border-red-200';
-                  } else {
-                    cardClass = 'bg-blue-50 text-blue-800 border-blue-200';
+                  if (booking) {
+                    derivedStatus = getBookingStatus(booking);
+                    if (derivedStatus === 'Completed') {
+                      cardClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                    } else if (derivedStatus === 'Running') {
+                      cardClass = 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse';
+                    } else if (derivedStatus === 'Cancelled') {
+                      cardClass = 'bg-red-50 text-red-800 border-red-200';
+                    } else {
+                      cardClass = 'bg-blue-50 text-blue-800 border-blue-200';
+                    }
                   }
-                }
 
-                return (
-                  <div 
-                    key={dateStr}
-                    onClick={() => !booking && handleCellClick(groundId, dateStr, slot)}
-                    className={`p-1 border-r border-border/80 last:border-r-0 relative ${
-                      booking ? '' : 'cursor-pointer hover:bg-accent/40 bg-card'
-                    }`}
-                  >
-                    {booking ? (
-                      isStart ? (
-                        <div 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBooking(booking);
-                          }}
-                          className={`absolute inset-1 rounded-lg border p-1 px-2 flex flex-col justify-between shadow-sm cursor-pointer text-left overflow-hidden ${cardClass}`}
-                          style={{ 
-                            height: `calc(${
-                              (parseInt(booking.end_time.split(':')[0]) - parseInt(booking.start_time.split(':')[0])) * 50
-                            }px - 8px)`,
-                            zIndex: 10
-                          }}
-                        >
-                          <p className="font-bold text-[10px] truncate leading-tight">{booking.customer?.name}</p>
-                          <p className="text-[8px] opacity-75 font-semibold leading-none">{formatSingleHourAMPM(booking.start_time)}</p>
-                        </div>
-                      ) : null
-                    ) : null}
-                  </div>
-                );
-              })}
-
-            </div>
-          ))}
+                  return (
+                    <div 
+                      key={dateStr}
+                      onClick={() => !booking && handleCellClick(groundId, dateStr, slot)}
+                      className={`p-1 border-r border-border/80 last:border-r-0 relative ${
+                        booking ? '' : 'cursor-pointer hover:bg-accent/40 bg-card'
+                      }`}
+                    >
+                      {booking ? (
+                        isStart ? (
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBooking(booking);
+                            }}
+                            className={`absolute inset-1 rounded-lg border p-2.5 flex flex-col justify-between shadow-sm cursor-pointer text-left overflow-hidden ${cardClass}`}
+                            style={{ 
+                              height: `calc(${
+                                (parseInt(booking.end_time.split(':')[0]) - parseInt(booking.start_time.split(':')[0])) * 140
+                              }px - 8px)`,
+                              zIndex: 10
+                            }}
+                          >
+                            <div className="min-w-0">
+                              <p className="font-bold text-[10px] truncate leading-tight">{booking.customer?.name}</p>
+                              <p className="text-[8px] opacity-75 font-semibold leading-none mt-1">{formatSingleHourAMPM(booking.start_time)}</p>
+                            </div>
+                            <div className="flex items-center justify-between text-[8px] opacity-80 font-bold border-t border-current/10 pt-1 mt-1">
+                              <span>₹{booking.final_amount}</span>
+                            </div>
+                          </div>
+                        ) : null
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
