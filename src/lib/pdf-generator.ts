@@ -1,6 +1,4 @@
-// PDF Generation Service using jsPDF & jsPDF-AutoTable
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type jsPDF from 'jspdf';
 import { Booking, Payment } from './db/types';
 
 // Helper to asynchronously load the brand logo image in the browser
@@ -90,6 +88,9 @@ export const exportBookingReceiptPDF = async (
   booking: Booking,
   paymentSummary: { totalPaid: number; pendingAmount: number; status: string }
 ) => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -196,6 +197,9 @@ export const exportRevenueReportPDF = async (
   paymentSummaries: Record<string, { totalPaid: number; pendingAmount: number; status: string }>,
   dateRange: string
 ) => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
   const doc = new jsPDF();
   const logoImg = await loadLogoImage();
   addPDFHeader(doc, `REVENUE REPORT SUMMARY`, logoImg);
@@ -279,6 +283,9 @@ export const exportPaymentsReportPDF = async (
   bookingsList: Booking[],
   dateRange: string
 ) => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
   const doc = new jsPDF();
   const logoImg = await loadLogoImage();
   addPDFHeader(doc, `TRANSACTION RECEIPTS REPORT`, logoImg);
@@ -333,6 +340,9 @@ export const exportDiscountReportPDF = async (
   bookingsList: Booking[],
   dateRange: string
 ) => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
   const doc = new jsPDF();
   const logoImg = await loadLogoImage();
   addPDFHeader(doc, `DISCOUNT AUDITING REPORT`, logoImg);
