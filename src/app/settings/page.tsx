@@ -1,0 +1,530 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import DashboardLayout from '@/components/layout/dashboard-layout';
+import { getGrounds, logActivity, getPartners, createUserProfile, getUserProfileByPhone } from '@/lib/db/db-service';
+import { Ground, User } from '@/lib/db/types';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { createClient } from '@supabase/supabase-js';
+import { 
+  Settings as SettingsIcon, 
+  MapPin, 
+  Clock, 
+  Phone, 
+  Shield, 
+  Building,
+  Save,
+  Check,
+  AlertCircle,
+  Users as UsersIcon,
+  Plus,
+  Mail,
+  Key
+} from 'lucide-react';
+
+export default function SettingsPage() {
+  const { user } = useAuthStore();
+  const [grounds, setGrounds] = useState<Ground[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Active Tab: 'facility' or 'partners'
+  const [activeTab, setActiveTab] = useState<'facility' | 'partners'>('facility');
+
+  // Facility Info Form States
+  const [businessName, setBusinessName] = useState('360 Club Box');
+  const [phone, setPhone] = useState('9876543210');
+  const [address, setAddress] = useState('Sector 5, Sports Complex, Mumbai');
+  const [opHours, setOpHours] = useState('06:00 AM - 09:00 PM');
+  
+  // Custom Grounds configuration (Edit prices)
+  const [rates, setRates] = useState<Record<string, string>>({});
+  const [updating, setUpdating] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Partner Management States
+  const [partners, setPartners] = useState<User[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(false);
+  const [partnerEmail, setPartnerEmail] = useState('');
+  const [partnerPhone, setPartnerPhone] = useState('');
+  const [partnerPassword, setPartnerPassword] = useState('');
+  const [partnerAdding, setPartnerAdding] = useState(false);
+  const [partnerError, setPartnerError] = useState<string | null>(null);
+  const [partnerSuccess, setPartnerSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const g = await getGrounds();
+        setGrounds(g);
+        
+        // Map rate strings
+        const initialRates: typeof rates = {};
+        g.forEach(item => {
+          initialRates[item.id] = item.hourly_rate.toString();
+        });
+        setRates(initialRates);
+
+        // Retrieve facility name from localStorage if saved
+        if (typeof window !== 'undefined') {
+          const storedName = localStorage.getItem('turf_facility_name');
+          if (storedName) {
+            setBusinessName(storedName);
+          }
+        }
+
+        // Fetch partners if logged-in user is admin
+        if (user?.role === 'admin') {
+          setPartnersLoading(true);
+          const p = await getPartners();
+          setPartners(p);
+          setPartnersLoading(false);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [user]);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (user?.role !== 'admin') return;
+
+    setUpdating(true);
+    setSuccessMsg(null);
+
+    // Mock update: Write updated ground rates to localstorage
+    setTimeout(async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('turf_grounds');
+          if (stored) {
+            const currentGrounds: Ground[] = JSON.parse(stored);
+            const updated = currentGrounds.map(g => ({
+              ...g,
+              hourly_rate: Number(rates[g.id]) || g.hourly_rate
+            }));
+            localStorage.setItem('turf_grounds', JSON.stringify(updated));
+            setGrounds(updated);
+          }
+          // Save facility info
+          localStorage.setItem('turf_facility_name', businessName);
+        }
+
+        await logActivity('Updated turf configuration & hourly rates', user?.email);
+        setSuccessMsg('Turf configurations updated successfully');
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setUpdating(false);
+      }
+    }, 600);
+  };
+
+  const handleAddPartner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (user?.role !== 'admin') return;
+
+    setPartnerAdding(true);
+    setPartnerError(null);
+    setPartnerSuccess(null);
+
+    try {
+      if (!partnerEmail.trim() || !partnerPhone.trim() || !partnerPassword.trim()) {
+        throw new Error('Please fill in all fields (Email, Phone, Password)');
+      }
+      if (!partnerPhone.match(/^\d{10}$/)) {
+        throw new Error('Phone number must be exactly 10 digits');
+      }
+      if (partnerPassword.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
+
+      // Check if phone number already registered
+      const existingProfile = await getUserProfileByPhone(partnerPhone);
+      if (existingProfile) {
+        throw new Error('A user profile with this phone number already exists.');
+      }
+
+      let newUserId = `partner_${Date.now()}`;
+
+      // Sign up in Supabase using secondary client so we don't log out the admin
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+      if (supabaseUrl && supabaseAnonKey) {
+        const secondaryClient = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false
+          }
+        });
+
+        const { data: signUpData, error: signUpError } = await secondaryClient.auth.signUp({
+          email: partnerEmail,
+          password: partnerPassword,
+        });
+
+        if (signUpError) {
+          throw new Error(signUpError.message);
+        }
+        if (signUpData.user) {
+          newUserId = signUpData.user.id;
+        }
+      }
+
+      // Save user profile in DB users table
+      await createUserProfile({
+        id: newUserId,
+        email: partnerEmail,
+        phone: partnerPhone,
+        role: 'partner'
+      });
+
+      await logActivity(`Admin added partner account: ${partnerEmail} (${partnerPhone})`, user?.email);
+      setPartnerSuccess('Partner user registered successfully!');
+      setPartnerEmail('');
+      setPartnerPhone('');
+      setPartnerPassword('');
+
+      // Reload partner list
+      const p = await getPartners();
+      setPartners(p);
+    } catch (err: any) {
+      setPartnerError(err.message || 'Failed to register partner account');
+    } finally {
+      setPartnerAdding(false);
+    }
+  };
+
+  const handleRateChange = (groundId: string, value: string) => {
+    setRates({
+      ...rates,
+      [groundId]: value.replace(/\D/g, '')
+    });
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6 max-w-5xl text-left">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Turf Settings</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Configure operational hours, brand details, and manage team accounts</p>
+        </div>
+
+        {/* Tab Buttons */}
+        {user?.role === 'admin' && (
+          <div className="border-b border-border flex gap-4 shrink-0">
+            <button
+              onClick={() => setActiveTab('facility')}
+              className={`pb-3 text-xs font-bold border-b-2 px-1 capitalize transition-all cursor-pointer ${
+                activeTab === 'facility' 
+                  ? 'border-primary text-primary' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              General & Rates
+            </button>
+            <button
+              onClick={() => setActiveTab('partners')}
+              className={`pb-3 text-xs font-bold border-b-2 px-1 capitalize transition-all cursor-pointer ${
+                activeTab === 'partners' 
+                  ? 'border-primary text-primary' 
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Partner Accounts
+            </button>
+          </div>
+        )}
+
+        {/* TAB 1: FACILITY & RATES CONFIGURATION */}
+        {activeTab === 'facility' && (
+          <div className="space-y-6 animate-fade-in">
+            {successMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+                <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span>{successMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              {/* Ground Rates Grid */}
+              <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-sm space-y-4">
+                <h2 className="font-bold text-sm text-foreground flex items-center gap-1.5 border-b border-border pb-3">
+                  <Building className="h-4.5 w-4.5 text-primary" /> Turf Grounds & Rates
+                </h2>
+
+                {loading ? (
+                  <div className="h-20 flex items-center justify-center">
+                    <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {grounds.map(ground => (
+                      <div key={ground.id} className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center border-b border-border/40 pb-4 last:border-0 last:pb-0">
+                        <div>
+                          <p className="text-xs font-bold text-foreground">{ground.name}</p>
+                          <p className="text-[10px] text-muted-foreground">ID: {ground.id} • Registered</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1 sm:max-w-xs">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">₹</span>
+                            <input
+                              type="text"
+                              disabled={user?.role !== 'admin'}
+                              value={rates[ground.id] || ''}
+                              onChange={(e) => handleRateChange(ground.id, e.target.value)}
+                              className="w-full pl-7 pr-12 py-2 bg-muted/20 border border-border rounded-xl text-xs font-bold text-foreground focus:bg-card focus:outline-none"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground">/ hour</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Operational & Facility info */}
+              <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-sm space-y-5">
+                <h2 className="font-bold text-sm text-foreground flex items-center gap-1.5 border-b border-border pb-3">
+                  <SettingsIcon className="h-4.5 w-4.5 text-primary" /> Facility Metadata
+                </h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Business Brand Name</label>
+                    <input
+                      type="text"
+                      disabled={user?.role !== 'admin'}
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Support Hotline</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Phone className="h-3.5 w-3.5" /></span>
+                      <input
+                        type="text"
+                        disabled={user?.role !== 'admin'}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Operating Slot Ranges</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /></span>
+                      <input
+                        type="text"
+                        disabled
+                        value={opHours}
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-muted/30 text-muted-foreground text-xs font-semibold cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Physical Address</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5" /></span>
+                      <input
+                        type="text"
+                        disabled={user?.role !== 'admin'}
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Access Control Information */}
+              <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-sm space-y-3.5 text-xs text-muted-foreground">
+                <h3 className="font-bold text-xs text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                  <Shield className="h-4 w-4 text-primary" /> Role Permissions Scope
+                </h3>
+                <p>Your current session is authenticated as a <span className="font-bold text-primary">{user?.role === 'admin' ? 'Turf Owner (Admin)' : 'Staff Member (Partner)'}</span> account.</p>
+                {user?.role === 'partner' ? (
+                  <div className="p-3 bg-amber-50 border border-amber-250 text-amber-800 rounded-xl flex items-start gap-2">
+                    <AlertCircle className="h-4.5 w-4.5 shrink-0 text-amber-600 mt-0.5" />
+                    <span>Rate configurations and brand metadata edits are disabled for partner accounts. Please log in as Admin to save settings changes.</span>
+                  </div>
+                ) : (
+                  <p>You have write permissions for all fields. Rate changes will automatically affect any new bookings generated inside the turf scheduler.</p>
+                )}
+              </div>
+
+              {/* Action Footer */}
+              {user?.role === 'admin' && (
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="py-3 px-5 bg-primary hover:bg-primary/95 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 transition-transform active:scale-95 disabled:opacity-75"
+                >
+                  {updating ? (
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Save Settings Details
+                    </>
+                  )}
+                </button>
+              )}
+            </form>
+          </div>
+        )}
+
+        {/* TAB 2: PARTNER ACCOUNTS MANAGEMENT (Admin Only) */}
+        {activeTab === 'partners' && user?.role === 'admin' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-fade-in">
+            {/* Form Column */}
+            <div className="lg:col-span-1 bg-card border border-border/80 rounded-2xl p-6 shadow-sm space-y-4">
+              <h2 className="font-bold text-sm text-foreground flex items-center gap-1.5 border-b border-border pb-3">
+                <Plus className="h-4.5 w-4.5 text-primary" /> Register Partner
+              </h2>
+
+              {partnerSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <Check className="h-4 w-4 text-emerald-600" />
+                  <span>{partnerSuccess}</span>
+                </div>
+              )}
+
+              {partnerError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+                  <AlertCircle className="h-4.5 w-4.5 text-red-600 shrink-0" />
+                  <span>{partnerError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleAddPartner} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">Email Address</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Mail className="h-3.5 w-3.5" /></span>
+                    <input
+                      type="email"
+                      required
+                      placeholder="partner@example.com"
+                      value={partnerEmail}
+                      onChange={(e) => setPartnerEmail(e.target.value)}
+                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">Mobile Phone</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Phone className="h-3.5 w-3.5" /></span>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="10-digit phone number"
+                      value={partnerPhone}
+                      onChange={(e) => setPartnerPhone(e.target.value.replace(/\D/g, ''))}
+                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">Login Password</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Key className="h-3.5 w-3.5" /></span>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Minimum 6 characters"
+                      value={partnerPassword}
+                      onChange={(e) => setPartnerPassword(e.target.value)}
+                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={partnerAdding}
+                  className="w-full py-2.5 px-4 bg-primary hover:bg-primary/95 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-primary/10 transition-transform active:scale-95 disabled:opacity-75"
+                >
+                  {partnerAdding ? (
+                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4" />
+                      Add Partner Account
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* List Column */}
+            <div className="lg:col-span-2 bg-card border border-border/80 rounded-2xl p-6 shadow-sm space-y-4">
+              <h2 className="font-bold text-sm text-foreground flex items-center gap-1.5 border-b border-border pb-3">
+                <UsersIcon className="h-4.5 w-4.5 text-primary" /> Active Partners ({partners.length})
+              </h2>
+
+              {partnersLoading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2">
+                  <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs text-muted-foreground">Loading accounts...</span>
+                </div>
+              ) : partners.length === 0 ? (
+                <div className="py-12 text-center text-xs text-muted-foreground italic border border-dashed border-border rounded-xl">
+                  No partners registered yet. Use the form on the left to add your first partner.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/10 text-[9px] font-bold text-muted-foreground uppercase tracking-wider text-left">
+                        <th className="py-2.5 px-3">Email Account</th>
+                        <th className="py-2.5 px-3">Phone Number</th>
+                        <th className="py-2.5 px-3">Role Scope</th>
+                        <th className="py-2.5 px-3">Created On</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60 text-xs text-foreground font-semibold">
+                      {partners.map(p => (
+                        <tr key={p.id} className="hover:bg-muted/10">
+                          <td className="py-3 px-3 font-medium text-foreground">{p.email}</td>
+                          <td className="py-3 px-3 font-mono text-muted-foreground">{p.phone}</td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-800 rounded-md border border-blue-150 text-[10px] font-extrabold uppercase">
+                              {p.role}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-[10px] text-muted-foreground/80">
+                            {new Date(p.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}

@@ -1,0 +1,414 @@
+// Unified DB Service Layer
+import { hasSupabaseCredentials, supabase } from './supabase';
+import * as mockDb from './mock-db';
+import { Ground, Customer, Booking, Payment, ActivityLog, PaymentStatus, User } from './types';
+
+// Helper to determine if we should use Supabase or fallback to mock local database
+const useSupabase = (): boolean => {
+  return hasSupabaseCredentials() && supabase !== null;
+};
+
+// 1. Grounds Services
+export const getGrounds = async (): Promise<Ground[]> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('grounds')
+      .select('*')
+      .order('name');
+    
+    if (error) {
+      console.error('Supabase getGrounds error, falling back to mock:', error);
+      return mockDb.getGrounds();
+    }
+    return data || [];
+  }
+  return mockDb.getGrounds();
+};
+
+// 2. Customer Services
+export const getCustomers = async (): Promise<Customer[]> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('name');
+    
+    if (error) {
+      console.error('Supabase getCustomers error, falling back to mock:', error);
+      return mockDb.getCustomers();
+    }
+    return data || [];
+  }
+  return mockDb.getCustomers();
+};
+
+export const createCustomer = async (name: string, phone: string): Promise<Customer> => {
+  if (useSupabase() && supabase) {
+    // Check if phone already exists
+    const { data: existing, error: checkError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('phone', phone)
+      .maybeSingle();
+
+    if (existing) {
+      return existing;
+    }
+
+    const { data, error } = await supabase
+      .from('customers')
+      .insert([{ name, phone }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase createCustomer error, falling back to mock:', error);
+      return mockDb.createCustomer(name, phone);
+    }
+    
+    await logActivity(`Created customer: ${name} (${phone})`);
+    return data;
+  }
+  return mockDb.createCustomer(name, phone);
+};
+
+// 3. Bookings Services
+export const getBookings = async (): Promise<Booking[]> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        customer:customer_id (*),
+        ground:ground_id (*)
+      `)
+      .is('deleted_at', null)
+      .order('booking_date', { ascending: false });
+
+    if (error) {
+      console.error('Supabase getBookings error, falling back to mock:', error);
+      return mockDb.getBookings();
+    }
+    return data || [];
+  }
+  return mockDb.getBookings();
+};
+
+export const createBooking = async (
+  bookingData: Omit<Booking, 'id' | 'created_at'>,
+  userEmail: string = 'dhameliyaavadh592@gmail.com'
+): Promise<Booking> => {
+  if (useSupabase() && supabase) {
+    // 1. Conflict Check
+    const { data: conflicts, error: conflictError } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('ground_id', bookingData.ground_id)
+      .eq('booking_date', bookingData.booking_date)
+      .neq('status', 'Cancelled')
+      .is('deleted_at', null);
+
+    if (conflictError) {
+      console.error('Conflict check query failed:', conflictError);
+    } else if (conflicts && conflicts.length > 0) {
+      const overlap = conflicts.some(b => {
+        return bookingData.start_time < b.end_time && bookingData.end_time > b.start_time;
+      });
+      if (overlap) {
+        throw new Error('This time slot is already booked for this ground. Double bookings are not allowed.');
+      }
+    }
+
+    // 2. Insert Booking
+    const { data, error } = await supabase
+      .from('bookings')
+      .insert([bookingData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase createBooking error, falling back to mock:', error);
+      return mockDb.createBooking(bookingData, userEmail);
+    }
+
+    // Get customer name for logging
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('name')
+      .eq('id', bookingData.customer_id)
+      .single();
+
+    const custName = customer?.name || 'Unknown Customer';
+    await logActivity(`Created booking for ${custName} on ${bookingData.booking_date} (${bookingData.start_time} - ${bookingData.end_time})`, userEmail);
+    
+    return data;
+  }
+  return mockDb.createBooking(bookingData, userEmail);
+};
+
+export const updateBooking = async (
+  updatedBooking: Booking,
+  userEmail: string = 'dhameliyaavadh592@gmail.com'
+): Promise<Booking> => {
+  if (useSupabase() && supabase) {
+    // 1. Conflict Check
+    const { data: conflicts, error: conflictError } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('ground_id', updatedBooking.ground_id)
+      .eq('booking_date', updatedBooking.booking_date)
+      .neq('status', 'Cancelled')
+      .neq('id', updatedBooking.id)
+      .is('deleted_at', null);
+
+    if (conflicts && conflicts.length > 0) {
+      const overlap = conflicts.some(b => {
+        return updatedBooking.start_time < b.end_time && updatedBooking.end_time > b.start_time;
+      });
+      if (overlap) {
+        throw new Error('This time slot is already booked for this ground. Double bookings are not allowed.');
+      }
+    }
+
+    // 2. Update Booking
+    const { customer, ground, ...bookingPayload } = updatedBooking as any; // Strip relational fields before sending to DB
+    const { data, error } = await supabase
+      .from('bookings')
+      .update(bookingPayload)
+      .eq('id', updatedBooking.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase updateBooking error, falling back to mock:', error);
+      return mockDb.updateBooking(updatedBooking, userEmail);
+    }
+
+    await logActivity(`Updated booking ${updatedBooking.id} details`, userEmail);
+    return data;
+  }
+  return mockDb.updateBooking(updatedBooking, userEmail);
+};
+
+export const softDeleteBooking = async (
+  bookingId: string,
+  userEmail: string = 'dhameliyaavadh592@gmail.com'
+): Promise<void> => {
+  if (useSupabase() && supabase) {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ deleted_at: new Date().toISOString(), status: 'Cancelled' })
+      .eq('id', bookingId);
+
+    if (error) {
+      console.error('Supabase softDeleteBooking error, falling back to mock:', error);
+      return mockDb.softDeleteBooking(bookingId, userEmail);
+    }
+
+    await logActivity(`Deleted booking ${bookingId} (Soft Delete)`, userEmail);
+    return;
+  }
+  return mockDb.softDeleteBooking(bookingId, userEmail);
+};
+
+// 4. Payments Services
+export const getPayments = async (): Promise<Payment[]> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .order('payment_date', { ascending: false });
+
+    if (error) {
+      console.error('Supabase getPayments error, falling back to mock:', error);
+      return mockDb.getPayments();
+    }
+    return data || [];
+  }
+  return mockDb.getPayments();
+};
+
+export const getBookingPaymentSummary = async (bookingId: string) => {
+  if (useSupabase() && supabase) {
+    const { data: payments, error } = await supabase
+      .from('payments')
+      .select('amount_paid')
+      .eq('booking_id', bookingId);
+
+    const totalPaid = payments ? payments.reduce((sum, p) => sum + Number(p.amount_paid), 0) : 0;
+
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select('final_amount')
+      .eq('id', bookingId)
+      .single();
+
+    const finalAmount = booking ? Number(booking.final_amount) : 0;
+    const pendingAmount = Math.max(0, finalAmount - totalPaid);
+
+    let status: PaymentStatus = 'Pending';
+    if (totalPaid >= finalAmount && finalAmount > 0) {
+      status = 'Paid';
+    } else if (totalPaid > 0) {
+      status = 'Partial';
+    }
+
+    return {
+      totalPaid,
+      pendingAmount,
+      status
+    };
+  }
+  return mockDb.getBookingPaymentSummary(bookingId);
+};
+
+export const addPayment = async (
+  paymentData: Omit<Payment, 'id' | 'payment_date'>,
+  userEmail: string = 'dhameliyaavadh592@gmail.com'
+): Promise<Payment> => {
+  if (useSupabase() && supabase) {
+    const summary = await getBookingPaymentSummary(paymentData.booking_id);
+    const newPending = summary.pendingAmount - paymentData.amount_paid;
+    if (newPending < -0.01) {
+      throw new Error(`Invalid payment amount. Amount paid exceeds the remaining balance of ₹${summary.pendingAmount}.`);
+    }
+
+    const { data, error } = await supabase
+      .from('payments')
+      .insert([paymentData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase addPayment error, falling back to mock:', error);
+      return mockDb.addPayment(paymentData, userEmail);
+    }
+
+    // Fetch booking details for logging
+    const { data: booking } = await supabase
+      .from('bookings')
+      .select(`
+        customer:customer_id (name)
+      `)
+      .eq('id', paymentData.booking_id)
+      .single();
+
+    const customerName = (booking as any)?.customer?.name || 'Customer';
+    await logActivity(`Received payment of ₹${paymentData.amount_paid} via ${paymentData.payment_method} from ${customerName}`, userEmail);
+
+    return data;
+  }
+  return mockDb.addPayment(paymentData, userEmail);
+};
+
+// 5. Activity Logs Services
+export const getActivityLogs = async (): Promise<ActivityLog[]> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('activity_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase getActivityLogs error, falling back to mock:', error);
+      return mockDb.getActivityLogs();
+    }
+    return data || [];
+  }
+  return mockDb.getActivityLogs();
+};
+
+export const logActivity = async (action: string, userEmail: string = 'dhameliyaavadh592@gmail.com'): Promise<void> => {
+  if (useSupabase() && supabase) {
+    const { error } = await supabase
+      .from('activity_logs')
+      .insert([{ action, user_email: userEmail }]);
+
+    if (error) {
+      console.error('Supabase logActivity error, falling back to mock:', error);
+      mockDb.logActivity(action, userEmail);
+    }
+    return;
+  }
+  return mockDb.logActivity(action, userEmail);
+};
+
+// 6. User Profiles Services
+export const getUserProfileByPhone = async (phone: string): Promise<User | null> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('phone', phone)
+      .maybeSingle();
+      
+    if (error) {
+      console.error('Supabase getUserProfileByPhone error, falling back to mock:', error);
+      const mockUsers = mockDb.getUsers();
+      return mockUsers.find(u => u.phone === phone) || null;
+    }
+    return data;
+  }
+  const mockUsers = mockDb.getUsers();
+  return mockUsers.find(u => u.phone === phone) || null;
+};
+
+export const createUserProfile = async (
+  profile: Omit<User, 'created_at'>
+): Promise<User> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('users')
+      .insert([profile])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase createUserProfile error, falling back to mock:', error);
+      return mockDb.createUser(profile.email, profile.phone, profile.role, profile.id);
+    }
+    return data;
+  }
+  return mockDb.createUser(profile.email, profile.phone, profile.role, profile.id);
+};
+
+export const getPartners = async (): Promise<User[]> => {
+  if (useSupabase() && supabase) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('role', 'partner')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase getPartners error, falling back to mock:', error);
+      const mockUsers = mockDb.getUsers();
+      return mockUsers.filter(u => u.role === 'partner');
+    }
+    return data || [];
+  }
+  const mockUsers = mockDb.getUsers();
+  return mockUsers.filter(u => u.role === 'partner');
+};
+
+export const getBookingStatus = (booking: Booking): 'Booked' | 'Running' | 'Completed' | 'Cancelled' => {
+  if (booking.status === 'Cancelled') return 'Cancelled';
+  
+  const now = new Date();
+  const [year, month, day] = booking.booking_date.split('-').map(Number);
+  
+  const [startHour, startMin] = booking.start_time.split(':').map(Number);
+  const [endHour, endMin] = booking.end_time.split(':').map(Number);
+  
+  const startTime = new Date(year, month - 1, day, startHour, startMin, 0, 0);
+  const endTime = new Date(year, month - 1, day, endHour, endMin, 0, 0);
+  
+  if (now < startTime) {
+    return 'Booked';
+  } else if (now >= startTime && now <= endTime) {
+    return 'Running';
+  } else {
+    return 'Completed';
+  }
+};
+
