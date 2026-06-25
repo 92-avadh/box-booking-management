@@ -1,3 +1,53 @@
+diff --git a/node_modules/@opennextjs/cloudflare/dist/cli/build/patches/plugins/instrumentation.js b/node_modules/@opennextjs/cloudflare/dist/cli/build/patches/plugins/instrumentation.js
+index f8719c6..20f5fbe 100644
+--- a/node_modules/@opennextjs/cloudflare/dist/cli/build/patches/plugins/instrumentation.js
++++ b/node_modules/@opennextjs/cloudflare/dist/cli/build/patches/plugins/instrumentation.js
+@@ -12,7 +12,16 @@ export function patchInstrumentation(updater, buildOpts) {
+                 escape: false,
+             }),
+             contentFilter: /getInstrumentationModule\(/,
+-            callback: ({ contents }) => patchCode(contents, getNext154Rule(builtInstrumentationPath)),
++            callback: ({ contents }) => {
++                const astPatched = patchCode(contents, getNext154Rule(builtInstrumentationPath));
++                if (astPatched === contents || astPatched.includes("INSTRUMENTATION_HOOK_FILENAME")) {
++                    return contents.replace(
++                        /cachedInstrumentationModule\s*=\s*.*?INSTRUMENTATION_HOOK_FILENAME}\.js[^)]+\)+/g,
++                        `cachedInstrumentationModule = ${builtInstrumentationPath ? `require('${builtInstrumentationPath}')` : "null"}`
++                    );
++                }
++                return astPatched;
++            },
+         },
+     ]);
+     updater.updateContent("patch-instrumentation-next15", [
+@@ -37,22 +46,19 @@ export function patchInstrumentation(updater, buildOpts) {
+ export function getNext154Rule(builtInstrumentationPath) {
+     return `
+ rule:
+-  kind: expression_statement
+-  has:
+-    kind: assignment_expression
+-    all:
+-      - has: { pattern: "cachedInstrumentationModule" }
+-      - has: { kind: call_expression, regex: "INSTRUMENTATION_HOOK_FILENAME"}
++  kind: assignment_expression
++  all:
++    - has: { pattern: "cachedInstrumentationModule" }
++    - has: { kind: call_expression, regex: "INSTRUMENTATION_HOOK_FILENAME"}
+   inside:
+     kind: try_statement
+     stopBy: end
+-    has: { regex: "return cachedInstrumentationModule" }
+     inside:
+       kind: function_declaration
+       stopBy: end
+       has: { field: name, pattern: getInstrumentationModule }
+ fix: |-
+-      cachedInstrumentationModule = ${builtInstrumentationPath ? `require('${builtInstrumentationPath}')` : "null"};
++  cachedInstrumentationModule = ${builtInstrumentationPath ? `require('${builtInstrumentationPath}')` : "null"}
+ `;
+ }
+ export function getNext15Rule(builtInstrumentationPath) {
 diff --git a/node_modules/@opennextjs/cloudflare/dist/cli/build/patches/plugins/next-server.js b/node_modules/@opennextjs/cloudflare/dist/cli/build/patches/plugins/next-server.js
 index d816e83..84e0f66 100644
 --- a/node_modules/@opennextjs/cloudflare/dist/cli/build/patches/plugins/next-server.js
