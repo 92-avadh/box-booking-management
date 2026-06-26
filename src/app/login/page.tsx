@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as zod from 'zod';
 import { LogIn, Key, Mail, ShieldAlert, UserCheck, Phone, ArrowLeft } from 'lucide-react';
-import { logActivity, getUserProfileByPhone } from '@/lib/db/db-service';
+import { logActivity, getUserProfileByPhone, createUserProfile } from '@/lib/db/db-service';
 import { supabase, hasSupabaseCredentials } from '@/lib/db/supabase';
 
 const loginSchema = zod.object({
@@ -107,6 +107,30 @@ export default function LoginPage() {
             });
             if (authError) {
               console.warn('Supabase admin login session error:', authError.message);
+              if (authError.message.includes('Invalid login credentials') || authError.status === 400) {
+                console.log('Admin not found in Supabase Auth. Attempting auto-registration...');
+                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                  email: 'dhameliyaavadh592@gmail.com',
+                  password: 'Admin@123',
+                });
+                if (!signUpError && signUpData.user) {
+                  console.log('Admin registered in Supabase Auth successfully!');
+                  // Create user profile in public.users table
+                  await createUserProfile({
+                    id: signUpData.user.id,
+                    email: 'dhameliyaavadh592@gmail.com',
+                    phone: '9909108527',
+                    role: 'admin'
+                  });
+                  // Sign in again to establish session
+                  await supabase.auth.signInWithPassword({
+                    email: 'dhameliyaavadh592@gmail.com',
+                    password: 'Admin@123',
+                  });
+                } else {
+                  console.error('Admin auto-registration failed:', signUpError?.message);
+                }
+              }
             }
           } catch (e) {
             console.error('Supabase admin login session error:', e);

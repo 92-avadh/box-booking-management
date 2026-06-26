@@ -48,9 +48,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     const defaultNotifs: TurfNotification[] = [
-      { id: 'n1', title: 'Upcoming Booking', desc: 'Sachin Tendulkar is scheduled tomorrow at 7:00 AM (Ground A)', time: '10m ago', type: 'upcoming', read: false },
+      { id: 'n1', title: 'Upcoming Booking', desc: 'Sachin Tendulkar is scheduled tomorrow at 7:00 AM (Box 1)', time: '10m ago', type: 'upcoming', read: false },
       { id: 'n2', title: 'Pending Payment', desc: 'Virat Kohli has ₹500 outstanding dues on today\'s booking', time: '1h ago', type: 'payment', read: false },
-      { id: 'n3', title: 'Booking Cancelled', desc: 'Booking #book_1928 for Ground B has been cancelled', time: '3h ago', type: 'cancelled', read: true },
+      { id: 'n3', title: 'Booking Cancelled', desc: 'Booking #book_1928 for Box 2 has been cancelled', time: '3h ago', type: 'cancelled', read: true },
     ];
 
     const saved = localStorage.getItem('turf_notifications');

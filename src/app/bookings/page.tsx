@@ -795,7 +795,7 @@ function BookingsContent() {
 
   // Reset Form
   const resetBookingForm = () => {
-    setFormGroundId('');
+    setFormGroundId(grounds[0]?.id || '');
     setFormDate(getFormattedDate(new Date()));
     setSelectedSlots([]);
     setFormCustName('');
@@ -1303,14 +1303,14 @@ function BookingsContent() {
             <DropdownMenuTrigger>
               <button className="flex items-center gap-1.5 px-3 py-2 bg-card border border-border/85 rounded-xl text-xs font-semibold focus:outline-none cursor-pointer select-none shadow-sm">
                 {selectedGroundFilter === 'all' 
-                  ? 'All Grounds (Day View)' 
-                  : grounds.find(g => g.id === selectedGroundFilter)?.name || 'Select Ground'}
+                  ? 'All Boxes (Day View)' 
+                  : grounds.find(g => g.id === selectedGroundFilter)?.name || 'Select Box'}
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end">
               <DropdownMenuItem onClick={() => setSelectedGroundFilter('all')}>
-                All Grounds (Day View)
+                All Boxes (Day View)
               </DropdownMenuItem>
               {grounds.map(g => (
                 <DropdownMenuItem key={g.id} onClick={() => setSelectedGroundFilter(g.id)}>

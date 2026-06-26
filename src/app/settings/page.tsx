@@ -308,7 +308,7 @@ export default function SettingsPage() {
               {/* Ground Rates Grid */}
               <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-sm space-y-4">
                 <h2 className="font-bold text-sm text-foreground flex items-center gap-1.5 border-b border-border pb-3">
-                  <Building className="h-4.5 w-4.5 text-primary" /> Turf Grounds & Rates
+                  <Building className="h-4.5 w-4.5 text-primary" /> Turf Boxes & Rates
                 </h2>
 
                 {loading ? (
