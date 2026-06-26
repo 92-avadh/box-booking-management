@@ -493,8 +493,10 @@ function BookingsContent() {
   };
 
   // Load everything
-  const loadAllData = async () => {
-    setLoading(true);
+  const loadAllData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       if (typeof window !== 'undefined') {
         const storedStart = localStorage.getItem('turf_operating_start');
@@ -533,7 +535,7 @@ function BookingsContent() {
 
     // 1. Tab visibility/focus listener
     const handleFocus = () => {
-      loadAllData();
+      loadAllData(true);
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleFocus);
@@ -547,21 +549,21 @@ function BookingsContent() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings' },
           () => {
-            loadAllData();
+            loadAllData(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'payments' },
           () => {
-            loadAllData();
+            loadAllData(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'customers' },
           () => {
-            loadAllData();
+            loadAllData(true);
           }
         )
         .subscribe();
@@ -569,7 +571,7 @@ function BookingsContent() {
 
     // 3. Fallback polling (every 10 seconds)
     const interval = setInterval(() => {
-      loadAllData();
+      loadAllData(true);
     }, 10000);
 
     return () => {
@@ -681,6 +683,7 @@ function BookingsContent() {
         setFormSubmitting(false);
         return;
       }
+    }
     // Validate advance amount if paymentType is Advance
     if (paymentType === 'Advance') {
       const adv = Number(advanceAmount) || 0;
@@ -874,7 +877,7 @@ function BookingsContent() {
           paymentSummaryText = `Due (₹${calculatedFinalAmount})`;
         }
 
-        await loadAllData();
+        await loadAllData(true);
         setBookingSuccessData({
           customerName: custObj.name,
           customerPhone: custObj.phone,
@@ -954,7 +957,7 @@ function BookingsContent() {
     try {
       await softDeleteBooking(bookingId, user?.email);
       setSelectedBooking(null);
-      await loadAllData();
+      await loadAllData(true);
       showToast('Booking cancelled successfully', 'success');
     } catch (err: any) {
       const errMsg = err.message || 'Failed to cancel booking';
@@ -2504,7 +2507,7 @@ function BookingsContent() {
                     onClick={async () => {
                       setShowAddModal(false);
                       resetBookingForm();
-                      await loadAllData();
+                      await loadAllData(true);
                       router.refresh();
                     }}
                     className="py-2.5 px-10 bg-primary hover:bg-primary/95 text-white rounded-xl text-xs font-extrabold cursor-pointer transition-all active:scale-95 shadow-md shadow-primary/10"
