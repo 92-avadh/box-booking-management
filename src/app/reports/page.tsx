@@ -117,7 +117,7 @@ export default function ReportsPage() {
     try {
       if (selectedReportTab === 'bookings' || selectedReportTab === 'revenue') {
         const activeList = getFilteredBookings();
-        await exportRevenueReportPDF(activeList, paymentSummaries, rangeText);
+        await exportRevenueReportPDF(activeList, paymentSummaries, rangeText, payments);
       } else if (selectedReportTab === 'payments') {
         const activePayments = getFilteredPayments();
         await exportPaymentsReportPDF(activePayments, bookings, rangeText);

@@ -126,6 +126,9 @@ function BookingsContent() {
   const [wizardStep, setWizardStep] = useState<number>(1);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [paymentMode, setPaymentMode] = useState<'UPI' | 'Cash' | 'Split'>('UPI');
+  const [paymentType, setPaymentType] = useState<'Advance' | 'Full' | 'Due'>('Full');
+  const [advanceAmount, setAdvanceAmount] = useState<string>('0');
+  const [advancePaymentMethod, setAdvancePaymentMethod] = useState<'UPI' | 'Cash'>('UPI');
   const [upiSplitAmount, setUpiSplitAmount] = useState<string>('0');
   const [cashSplitAmount, setCashSplitAmount] = useState<string>('0');
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
@@ -678,6 +681,20 @@ function BookingsContent() {
         setFormSubmitting(false);
         return;
       }
+    // Validate advance amount if paymentType is Advance
+    if (paymentType === 'Advance') {
+      const adv = Number(advanceAmount) || 0;
+      const finalAmt = calculateFinalAmount();
+      if (adv <= 0) {
+        setFormError('Advance amount must be greater than 0');
+        showToast('Advance amount must be greater than 0', 'error');
+        return;
+      }
+      if (adv >= finalAmt) {
+        setFormError('Advance amount must be less than the total final amount. Choose "Full" payment type for full payments.');
+        showToast('Advance amount must be less than the total final amount', 'error');
+        return;
+      }
     }
 
     setFormSubmitting(true);
@@ -773,44 +790,67 @@ function BookingsContent() {
         let paymentSummaryText = '';
         let totalPaidVal = 0;
 
-        if (paymentMode === 'Split') {
-          const upiVal = Number(upiSplitAmount) || 0;
-          const cashVal = Number(cashSplitAmount) || 0;
-          totalPaidVal = upiVal + cashVal;
+        if (paymentType === 'Full') {
+          if (paymentMode === 'Split') {
+            const upiVal = Number(upiSplitAmount) || 0;
+            const cashVal = Number(cashSplitAmount) || 0;
+            totalPaidVal = upiVal + cashVal;
 
-          let upiRemaining = upiVal;
-          let cashRemaining = cashVal;
+            let upiRemaining = upiVal;
+            let cashRemaining = cashVal;
 
-          for (const newB of createdBookings) {
-            const bFinalAmount = newB.final_amount;
-            const bPaidUpi = Math.min(upiRemaining, bFinalAmount);
-            upiRemaining -= bPaidUpi;
+            for (const newB of createdBookings) {
+              const bFinalAmount = newB.final_amount;
+              const bPaidUpi = Math.min(upiRemaining, bFinalAmount);
+              upiRemaining -= bPaidUpi;
 
-            const bPaidCash = Math.min(cashRemaining, bFinalAmount - bPaidUpi);
-            cashRemaining -= bPaidCash;
+              const bPaidCash = Math.min(cashRemaining, bFinalAmount - bPaidUpi);
+              cashRemaining -= bPaidCash;
 
-            if (bPaidUpi > 0) {
-              await addPayment({
-                booking_id: newB.id,
-                amount_paid: bPaidUpi,
-                payment_method: 'UPI',
-                payment_status: (bPaidUpi + bPaidCash) >= bFinalAmount ? 'Paid' : 'Partial'
-              }, user?.email);
+              if (bPaidUpi > 0) {
+                await addPayment({
+                  booking_id: newB.id,
+                  amount_paid: bPaidUpi,
+                  payment_method: 'UPI',
+                  payment_status: (bPaidUpi + bPaidCash) >= bFinalAmount ? 'Paid' : 'Partial'
+                }, user?.email);
+              }
+              if (bPaidCash > 0) {
+                await addPayment({
+                  booking_id: newB.id,
+                  amount_paid: bPaidCash,
+                  payment_method: 'Cash',
+                  payment_status: (bPaidUpi + bPaidCash) >= bFinalAmount ? 'Paid' : 'Partial'
+                }, user?.email);
+              }
             }
-            if (bPaidCash > 0) {
-              await addPayment({
-                booking_id: newB.id,
-                amount_paid: bPaidCash,
-                payment_method: 'Cash',
-                payment_status: (bPaidUpi + bPaidCash) >= bFinalAmount ? 'Paid' : 'Partial'
-              }, user?.email);
+            paymentSummaryText = `Full (Split): ₹${upiVal} via UPI, ₹${cashVal} via Cash`;
+          } else {
+            // Single payment mode (UPI or Cash)
+            totalPaidVal = calculatedFinalAmount;
+            let remainingPayment = calculatedFinalAmount;
+            const method = paymentMode === 'Cash' ? 'Cash' : 'UPI';
+
+            for (const newB of createdBookings) {
+              const bFinalAmount = newB.final_amount;
+              const bPaid = Math.min(remainingPayment, bFinalAmount);
+              remainingPayment -= bPaid;
+
+              if (bPaid > 0) {
+                await addPayment({
+                  booking_id: newB.id,
+                  amount_paid: bPaid,
+                  payment_method: method,
+                  payment_status: bPaid >= bFinalAmount ? 'Paid' : 'Partial'
+                }, user?.email);
+              }
             }
+            paymentSummaryText = `Full: ${method} (₹${totalPaidVal})`;
           }
-          paymentSummaryText = `Split Payment: ₹${upiVal} via UPI, ₹${cashVal} via Cash`;
-        } else {
-          // Single payment mode (UPI or Cash)
-          totalPaidVal = calculatedFinalAmount;
-          let remainingPayment = calculatedFinalAmount;
+        } else if (paymentType === 'Advance') {
+          const advVal = Number(advanceAmount) || 0;
+          totalPaidVal = advVal;
+          let remainingPayment = advVal;
 
           for (const newB of createdBookings) {
             const bFinalAmount = newB.final_amount;
@@ -821,12 +861,17 @@ function BookingsContent() {
               await addPayment({
                 booking_id: newB.id,
                 amount_paid: bPaid,
-                payment_method: paymentMethod,
+                payment_method: advancePaymentMethod,
                 payment_status: bPaid >= bFinalAmount ? 'Paid' : 'Partial'
               }, user?.email);
             }
           }
-          paymentSummaryText = `${paymentMethod}: ₹${totalPaidVal}`;
+          const outstandingDue = calculatedFinalAmount - advVal;
+          paymentSummaryText = `Advance: ${advancePaymentMethod} (₹${advVal}), Due: ₹${outstandingDue}`;
+        } else {
+          // Due payment type (no payment recorded)
+          totalPaidVal = 0;
+          paymentSummaryText = `Due (₹${calculatedFinalAmount})`;
         }
 
         await loadAllData();
@@ -866,6 +911,9 @@ function BookingsContent() {
     setPaymentAmount('');
     setUpiSplitAmount('0');
     setCashSplitAmount('0');
+    setPaymentType('Full');
+    setAdvanceAmount('0');
+    setAdvancePaymentMethod('UPI');
     setCustomerSearchQuery('');
     setBookingSuccessData(null);
     setFormError(null);
@@ -2193,8 +2241,8 @@ function BookingsContent() {
                 <div className="space-y-4 flex flex-col justify-between flex-1">
                   <div className="space-y-4">
                     <div>
-                      <h4 className="font-bold text-sm text-foreground">Select Payment Method</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Select a full payment mode or split the total amount between UPI and Cash.</p>
+                      <h4 className="font-bold text-sm text-foreground">Select Payment Config</h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Select Full, Advance, or Due payment options.</p>
                     </div>
 
                     <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 text-center space-y-1">
@@ -2202,25 +2250,28 @@ function BookingsContent() {
                       <span className="text-xl font-black text-primary block">₹{calculateFinalAmount()}</span>
                     </div>
 
-                    {/* Payment Mode Selector */}
+                    {/* Payment Type Selector */}
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Payment Mode</label>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Payment Type</label>
                       <div className="grid grid-cols-3 gap-3">
-                        {(['UPI', 'Cash', 'Split'] as const).map(mode => {
-                          const isSelected = paymentMode === mode;
+                        {(['Full', 'Advance', 'Due'] as const).map(type => {
+                          const isSelected = paymentType === type;
                           return (
                             <button
-                              key={mode}
+                              key={type}
                               type="button"
                               onClick={() => {
-                                setPaymentMode(mode);
-                                const total = calculateFinalAmount();
-                                if (mode === 'Split') {
-                                  setUpiSplitAmount(Math.round(total / 2).toString());
-                                  setCashSplitAmount((total - Math.round(total / 2)).toString());
-                                } else {
-                                  setUpiSplitAmount(mode === 'UPI' ? total.toString() : '0');
-                                  setCashSplitAmount(mode === 'Cash' ? total.toString() : '0');
+                                setPaymentType(type);
+                                setFormError(null);
+                                if (type === 'Full') {
+                                  setPaymentMode('UPI');
+                                  const total = calculateFinalAmount();
+                                  setUpiSplitAmount(total.toString());
+                                  setCashSplitAmount('0');
+                                } else if (type === 'Advance') {
+                                  setAdvancePaymentMethod('UPI');
+                                  const suggestedAdv = Math.round((calculateFinalAmount() / 2) / 100) * 100 || 500;
+                                  setAdvanceAmount(suggestedAdv.toString());
                                 }
                               }}
                               className={`py-3 px-3 border rounded-xl text-xs font-bold cursor-pointer transition-all ${
@@ -2229,52 +2280,140 @@ function BookingsContent() {
                                   : 'bg-card border-border hover:bg-muted text-muted-foreground'
                               }`}
                             >
-                              {mode}
+                              {type}
                             </button>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* Split payment inputs */}
-                    {paymentMode === 'Split' ? (
-                      <div className="grid grid-cols-2 gap-4 bg-muted/20 rounded-xl p-4 border border-border/50">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">UPI Split Amount (₹)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={calculateFinalAmount()}
-                            value={upiSplitAmount}
-                            onChange={(e) => handleUpiSplitChange(e.target.value)}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            className="w-full px-3 py-2 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-bold text-foreground focus:outline-none"
-                          />
+                    {/* Conditional rendering based on paymentType */}
+                    {paymentType === 'Full' && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Payment Mode</label>
+                          <div className="grid grid-cols-3 gap-3">
+                            {(['UPI', 'Cash', 'Split'] as const).map(mode => {
+                              const isSelected = paymentMode === mode;
+                              return (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => {
+                                    setPaymentMode(mode);
+                                    const total = calculateFinalAmount();
+                                    if (mode === 'Split') {
+                                      setUpiSplitAmount(Math.round(total / 2).toString());
+                                      setCashSplitAmount((total - Math.round(total / 2)).toString());
+                                    } else {
+                                      setUpiSplitAmount(mode === 'UPI' ? total.toString() : '0');
+                                      setCashSplitAmount(mode === 'Cash' ? total.toString() : '0');
+                                    }
+                                  }}
+                                  className={`py-3 px-3 border rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-primary text-white border-primary shadow-sm shadow-primary/10 font-black'
+                                      : 'bg-card border-border hover:bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  {mode}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cash Split Amount (₹)</label>
-                          <input
-                            type="number"
-                            min={0}
-                            max={calculateFinalAmount()}
-                            value={cashSplitAmount}
-                            onChange={(e) => handleCashSplitChange(e.target.value)}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            className="w-full px-3 py-2 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-bold text-foreground focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-muted/10 p-4 border border-border/40 rounded-xl text-xs font-semibold text-muted-foreground text-center">
-                        Full payment of <strong className="text-primary font-black">₹{calculateFinalAmount()}</strong> will be logged via <strong className="uppercase">{paymentMode}</strong>.
+
+                        {paymentMode === 'Split' ? (
+                          <div className="grid grid-cols-2 gap-4 bg-muted/20 rounded-xl p-4 border border-border/50">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">UPI Split Amount (₹)</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={calculateFinalAmount()}
+                                value={upiSplitAmount}
+                                onChange={(e) => handleUpiSplitChange(e.target.value)}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                className="w-full px-3 py-2 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-bold text-foreground focus:outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cash Split Amount (₹)</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={calculateFinalAmount()}
+                                value={cashSplitAmount}
+                                onChange={(e) => handleCashSplitChange(e.target.value)}
+                                onWheel={(e) => e.currentTarget.blur()}
+                                className="w-full px-3 py-2 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-bold text-foreground focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-muted/10 p-4 border border-border/40 rounded-xl text-xs font-semibold text-muted-foreground text-center">
+                            Full payment of <strong className="text-primary font-black">₹{calculateFinalAmount()}</strong> will be logged via <strong className="uppercase">{paymentMode}</strong>.
+                          </div>
+                        )}
+
+                        {paymentMode === 'Split' && (
+                          <div className="p-3 bg-emerald-50 border border-emerald-150 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-1.5 justify-center">
+                            <Check className="h-4 w-4 text-emerald-600" />
+                            <span>Split matches bill: ₹{upiSplitAmount} + ₹{cashSplitAmount} = ₹{calculateFinalAmount()}</span>
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* Verify Split Sum Banner */}
-                    {paymentMode === 'Split' && (
-                      <div className="p-3 bg-emerald-50 border border-emerald-150 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-1.5 justify-center">
-                        <Check className="h-4 w-4 text-emerald-600" />
-                        <span>Split matches bill: ₹{upiSplitAmount} + ₹{cashSplitAmount} = ₹{calculateFinalAmount()}</span>
+                    {paymentType === 'Advance' && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Payment Mode</label>
+                          <div className="grid grid-cols-2 gap-3">
+                            {(['UPI', 'Cash'] as const).map(mode => {
+                              const isSelected = advancePaymentMethod === mode;
+                              return (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => setAdvancePaymentMethod(mode)}
+                                  className={`py-3 px-3 border rounded-xl text-xs font-bold cursor-pointer transition-all ${
+                                    isSelected
+                                      ? 'bg-primary text-white border-primary shadow-sm shadow-primary/10 font-black'
+                                      : 'bg-card border-border hover:bg-muted text-muted-foreground'
+                                  }`}
+                                >
+                                  {mode}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 text-left">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Advance Amount (₹)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={calculateFinalAmount() - 1}
+                            value={advanceAmount}
+                            onChange={(e) => {
+                              setAdvanceAmount(e.target.value);
+                              setFormError(null);
+                            }}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            className="w-full px-3 py-2 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-bold text-foreground focus:outline-none"
+                          />
+                          <span className="text-[10px] text-muted-foreground block mt-1">
+                            Remaining Due: <strong className="text-amber-600">₹{Math.max(0, calculateFinalAmount() - (Number(advanceAmount) || 0))}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentType === 'Due' && (
+                      <div className="bg-amber-50/20 border border-amber-250/30 p-4 rounded-xl text-xs font-semibold text-amber-800 text-center">
+                        No immediate payment will be logged. The full bill of <strong className="font-black text-amber-700">₹{calculateFinalAmount()}</strong> will be marked as outstanding Due (Pending).
                       </div>
                     )}
                   </div>

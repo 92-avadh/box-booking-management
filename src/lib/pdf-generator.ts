@@ -195,7 +195,8 @@ export const exportBookingReceiptPDF = async (
 export const exportRevenueReportPDF = async (
   bookingsList: Booking[],
   paymentSummaries: Record<string, { totalPaid: number; pendingAmount: number; status: string }>,
-  dateRange: string
+  dateRange: string,
+  paymentsList: Payment[] = []
 ) => {
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
@@ -244,13 +245,19 @@ export const exportRevenueReportPDF = async (
 
   const tableBody = bookingsList.map(b => {
     const summary = paymentSummaries[b.id];
+    const bookingPayments = paymentsList.filter(p => p.booking_id === b.id);
+    const paymentBreakdown = bookingPayments.map(p => `${p.payment_method}: ₹${p.amount_paid}`).join(', ');
+    const paidText = summary && summary.totalPaid > 0
+      ? `₹${summary.totalPaid}\n(${paymentBreakdown})`
+      : '₹0';
+
     return [
       b.id,
       new Date(b.booking_date).toLocaleDateString(),
       b.customer?.name || 'Walk-in',
       b.ground?.name.split(' ')[0] || 'Ground',
       `₹${b.final_amount}`,
-      `₹${summary ? summary.totalPaid : 0}`,
+      paidText,
       `₹${summary ? summary.pendingAmount : 0}`,
       summary?.status || 'Pending'
     ];
