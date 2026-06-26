@@ -35,6 +35,8 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState('9876543210');
   const [address, setAddress] = useState('Sector 5, Sports Complex, Mumbai');
   const [opHours, setOpHours] = useState('06:00 AM - 09:00 PM');
+  const [opStartHour, setOpStartHour] = useState('06:00');
+  const [opEndHour, setOpEndHour] = useState('22:00');
   
   // Custom Grounds configuration (Edit prices)
   const [rates, setRates] = useState<Record<string, string>>({});
@@ -112,6 +114,10 @@ export default function SettingsPage() {
           if (storedName) {
             setBusinessName(storedName);
           }
+          const storedStart = localStorage.getItem('turf_operating_start');
+          const storedEnd = localStorage.getItem('turf_operating_end');
+          if (storedStart) setOpStartHour(storedStart);
+          if (storedEnd) setOpEndHour(storedEnd);
         }
 
         // Fetch partners if logged-in user is admin
@@ -155,6 +161,8 @@ export default function SettingsPage() {
           localStorage.setItem('turf_slot_pricing', JSON.stringify(slotPricing));
           // Save facility info
           localStorage.setItem('turf_facility_name', businessName);
+          localStorage.setItem('turf_operating_start', opStartHour);
+          localStorage.setItem('turf_operating_end', opEndHour);
         }
 
         await logActivity('Updated turf configuration & hourly rates', user?.email);
@@ -470,16 +478,59 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Operating Slot Ranges</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /></span>
-                      <input
-                        type="text"
-                        disabled
-                        value={opHours}
-                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-muted/30 text-muted-foreground text-xs font-semibold cursor-not-allowed"
-                      />
+                  <div className="space-y-1.5 col-span-1 sm:col-span-2">
+                    <label className="text-xs font-semibold text-muted-foreground">Operating Time Range</label>
+                    <div className="flex items-center gap-3">
+                      <div className="relative flex-1">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /></span>
+                        <select
+                          disabled={user?.role !== 'admin'}
+                          value={opStartHour}
+                          onChange={(e) => {
+                            setOpStartHour(e.target.value);
+                            // Ensure start < end
+                            const startH = parseInt(e.target.value.split(':')[0]);
+                            const endH = parseInt(opEndHour.split(':')[0]);
+                            if (startH >= endH) {
+                              const nextH = Math.min(24, startH + 1);
+                              setOpEndHour(`${nextH.toString().padStart(2, '0')}:00`);
+                            }
+                          }}
+                          className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold"
+                        >
+                          {Array.from({ length: 24 }, (_, i) => {
+                            const val = `${i.toString().padStart(2, '0')}:00`;
+                            const display = i === 0 ? '12:00 AM' : i === 12 ? '12:00 PM' : i > 12 ? `${i - 12}:00 PM` : `${i}:00 AM`;
+                            return <option key={val} value={val}>{display} (Start)</option>;
+                          })}
+                        </select>
+                      </div>
+                      <span className="text-xs text-muted-foreground font-semibold">to</span>
+                      <div className="relative flex-1">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /></span>
+                        <select
+                          disabled={user?.role !== 'admin'}
+                          value={opEndHour}
+                          onChange={(e) => {
+                            setOpEndHour(e.target.value);
+                            // Ensure end > start
+                            const endH = parseInt(e.target.value.split(':')[0]);
+                            const startH = parseInt(opStartHour.split(':')[0]);
+                            if (endH <= startH) {
+                              const prevH = Math.max(0, endH - 1);
+                              setOpStartHour(`${prevH.toString().padStart(2, '0')}:00`);
+                            }
+                          }}
+                          className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-border bg-muted/20 focus:bg-card focus:outline-none text-xs font-semibold"
+                        >
+                          {Array.from({ length: 24 }, (_, i) => {
+                            const hr = i + 1;
+                            const val = `${hr.toString().padStart(2, '0')}:00`;
+                            const display = hr === 12 ? '12:00 PM' : hr === 24 ? '12:00 AM' : hr > 12 ? `${hr - 12}:00 PM` : `${hr}:00 AM`;
+                            return <option key={val} value={val}>{display} (End)</option>;
+                          })}
+                        </select>
+                      </div>
                     </div>
                   </div>
 

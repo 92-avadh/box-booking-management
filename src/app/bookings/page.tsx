@@ -105,6 +105,22 @@ function BookingsContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSubmitting, setFormSubmitting] = useState(false);
 
+  // Operating Time Range
+  const [opStartHour, setOpStartHour] = useState('06:00');
+  const [opEndHour, setOpEndHour] = useState('22:00');
+
+  // Dynamic time slots generation
+  const getVisibleTimeSlots = () => {
+    const startH = parseInt(opStartHour.split(':')[0]);
+    const endH = parseInt(opEndHour.split(':')[0]);
+    const slots: string[] = [];
+    for (let h = startH; h <= endH; h++) {
+      slots.push(`${h.toString().padStart(2, '0')}:00`);
+    }
+    return slots;
+  };
+  const visibleTimeSlots = getVisibleTimeSlots();
+
   // Onboarding Wizard States
   const [wizardStep, setWizardStep] = useState<number>(1);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
@@ -138,6 +154,22 @@ function BookingsContent() {
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+  };
+
+  const isSlotInPast = (dateStr: string, slotStart: string): boolean => {
+    const todayObj = new Date();
+    const todayLocalStr = getLocalFormattedDate(todayObj);
+    const todayUtcStr = getFormattedDate(todayObj);
+    const isToday = dateStr === todayLocalStr || dateStr === todayUtcStr;
+    const isBeforeToday = dateStr < todayLocalStr && dateStr < todayUtcStr;
+    
+    if (isBeforeToday) return true;
+    if (isToday) {
+      const currentHour = todayObj.getHours();
+      const slotHour = parseInt(slotStart.split(':')[0]);
+      return slotHour < currentHour;
+    }
+    return false;
   };
 
   // Pricing helper for slot
@@ -461,6 +493,13 @@ function BookingsContent() {
   const loadAllData = async () => {
     setLoading(true);
     try {
+      if (typeof window !== 'undefined') {
+        const storedStart = localStorage.getItem('turf_operating_start');
+        const storedEnd = localStorage.getItem('turf_operating_end');
+        if (storedStart) setOpStartHour(storedStart);
+        if (storedEnd) setOpEndHour(storedEnd);
+      }
+      
       const g = await getGrounds();
       const c = await getCustomers();
       const b = await getBookings();
@@ -911,7 +950,7 @@ function BookingsContent() {
 
           {/* Time Slots Grid */}
           <div className="divide-y divide-border/60">
-            {TIME_SLOTS.slice(0, -1).map((slot, index) => {
+            {visibleTimeSlots.slice(0, -1).map((slot, index) => {
               return (
                 <div 
                   key={slot} 
@@ -927,6 +966,7 @@ function BookingsContent() {
                   {activeGrounds.map(ground => {
                     const booking = getBookingForSlot(ground.id, dateStr, slot);
                     const isStart = booking && booking.start_time === slot;
+                    const isPast = isSlotInPast(dateStr, slot);
 
                     let cardClass = '';
                     let dotClass = '';
@@ -952,9 +992,13 @@ function BookingsContent() {
                     return (
                       <div 
                         key={ground.id} 
-                        onClick={() => !booking && handleCellClick(ground.id, dateStr, slot)}
+                        onClick={() => !booking && !isPast && handleCellClick(ground.id, dateStr, slot)}
                         className={`p-1.5 border-r border-border/80 last:border-r-0 flex flex-col relative transition-all duration-150 ${
-                          booking ? 'cursor-default' : 'cursor-pointer hover:bg-accent/40 bg-card'
+                          booking 
+                            ? 'cursor-default' 
+                            : isPast 
+                              ? 'cursor-not-allowed bg-muted/20 opacity-60' 
+                              : 'cursor-pointer hover:bg-accent/40 bg-card'
                         }`}
                       >
                         {booking ? (
@@ -990,6 +1034,10 @@ function BookingsContent() {
                               </div>
                             </div>
                           ) : null
+                        ) : isPast ? (
+                          <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-muted-foreground/40 select-none">
+                            Past Slot
+                          </div>
                         ) : (
                           <div className="h-full w-full flex items-center justify-center opacity-0 group-hover:opacity-100 text-[10px] font-bold text-primary transition-opacity gap-1">
                             <Plus className="h-3 w-3" /> Book slot
@@ -1048,7 +1096,7 @@ function BookingsContent() {
           </div>
 
           <div className="divide-y divide-border/60">
-            {TIME_SLOTS.slice(0, -1).map((slot) => (
+            {visibleTimeSlots.slice(0, -1).map((slot) => (
               <div 
                 key={slot} 
                 className="grid min-h-[140px] group"
@@ -1061,6 +1109,7 @@ function BookingsContent() {
                   const dateStr = getFormattedDate(date);
                   const booking = getBookingForSlot(groundId, dateStr, slot);
                   const isStart = booking && booking.start_time === slot;
+                  const isPast = isSlotInPast(dateStr, slot);
 
                   let cardClass = '';
                   let derivedStatus = 'Booked';
@@ -1081,9 +1130,13 @@ function BookingsContent() {
                   return (
                     <div 
                       key={dateStr}
-                      onClick={() => !booking && handleCellClick(groundId, dateStr, slot)}
+                      onClick={() => !booking && !isPast && handleCellClick(groundId, dateStr, slot)}
                       className={`p-1 border-r border-border/80 last:border-r-0 relative ${
-                        booking ? '' : 'cursor-pointer hover:bg-accent/40 bg-card'
+                        booking 
+                          ? '' 
+                          : isPast 
+                            ? 'cursor-not-allowed bg-muted/20 opacity-60' 
+                            : 'cursor-pointer hover:bg-accent/40 bg-card'
                       }`}
                     >
                       {booking ? (
@@ -1110,6 +1163,10 @@ function BookingsContent() {
                             </div>
                           </div>
                         ) : null
+                      ) : isPast ? (
+                        <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-muted-foreground/30 text-center select-none py-4">
+                          Past
+                        </div>
                       ) : null}
                     </div>
                   );
@@ -1710,7 +1767,7 @@ function BookingsContent() {
 
               {/* STEP 2: SELECT TURF BOX & DATE */}
               {wizardStep === 2 && (
-                <div className="space-y-4 flex flex-col justify-between flex-1">
+                <div className="space-y-4 flex flex-col justify-between flex-1 max-w-md mx-auto w-full">
                   <div className="space-y-4">
                     {/* Turf Selector Box */}
                     <div className="space-y-2">
@@ -1831,8 +1888,9 @@ function BookingsContent() {
 
                       {/* Time slots grid: 2 columns on mobile, 3/4 on larger screens */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 overflow-y-auto max-h-[240px] pr-1.5 font-mono">
-                        {TIME_SLOTS.slice(0, -1).map((slot) => {
+                        {visibleTimeSlots.slice(0, -1).map((slot) => {
                           const isBooked = isSlotBooked(formGroundId, formDate, slot);
+                          const isPast = isSlotInPast(formDate, slot);
                           const isSelected = selectedSlots.includes(slot);
                           const price = getSlotPrice(formGroundId, formDate, slot);
                           const displayTime = formatSlotTimeOnly(slot);
@@ -1849,6 +1907,22 @@ function BookingsContent() {
                                 <span className="bg-red-950/80 border border-red-800 text-red-500 text-[8px] font-black uppercase px-1 py-0.5 rounded-md flex items-center gap-0.5">
                                   <Check className="h-3 w-3 stroke-[3]" />
                                   Booked
+                                </span>
+                              </button>
+                            );
+                          }
+
+                          if (isPast) {
+                            return (
+                              <button
+                                key={slot}
+                                type="button"
+                                disabled
+                                className="w-full py-2 px-2 border border-emerald-950/20 bg-emerald-950/10 text-emerald-650/40 font-bold rounded-xl text-[11px] flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-50 shrink-0"
+                              >
+                                <span>{displayTime}</span>
+                                <span className="bg-emerald-950/30 border border-emerald-900/20 text-emerald-650/50 text-[8px] font-bold uppercase px-1 py-0.5 rounded-md">
+                                  Past
                                 </span>
                               </button>
                             );

@@ -99,6 +99,19 @@ export default function LoginPage() {
     try {
       // 1. Direct local admin check
       if (sanitizedPhone === '9909108527' && sanitizedPassword === 'Admin@123') {
+        if (hasSupabaseCredentials() && supabase) {
+          try {
+            const { error: authError } = await supabase.auth.signInWithPassword({
+              email: 'dhameliyaavadh592@gmail.com',
+              password: 'Admin@123',
+            });
+            if (authError) {
+              console.warn('Supabase admin login session error:', authError.message);
+            }
+          } catch (e) {
+            console.error('Supabase admin login session error:', e);
+          }
+        }
         login('dhameliyaavadh592@gmail.com', 'admin');
         await logActivity('Admin logged in', 'dhameliyaavadh592@gmail.com');
         resetRateLimit('login_attempts');
