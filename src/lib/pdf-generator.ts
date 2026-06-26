@@ -269,9 +269,43 @@ export const exportRevenueReportPDF = async (
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
 
-  const doc = new jsPDF();
+  // Use landscape so all 8 columns fit with enough width for the Paid column
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const logoImg = await loadLogoImage();
-  addPDFHeader(doc, `REVENUE REPORT SUMMARY`, logoImg);
+
+  // Landscape header band (297mm wide)
+  doc.setFillColor(12, 74, 40);
+  doc.rect(0, 0, 297, 32, 'F');
+  if (logoImg) {
+    doc.addImage(logoImg, 'PNG', 14, 5, 22, 22);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('360 CLUB BOX', 40, 16);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Premium Turf Booking & Management Dashboard', 40, 22);
+  } else {
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.text('360 CLUB BOX', 14, 17);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Premium Turf Booking & Management Dashboard', 14, 23);
+  }
+  doc.setTextColor(60, 60, 60);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('REVENUE REPORT SUMMARY', 14, 43);
+  const now = new Date();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text(`Generated on: ${now.toLocaleDateString()} at ${now.toLocaleTimeString()}`, 210, 43);
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.5);
+  doc.line(14, 47, 283, 47);
 
   // Summarize list totals
   const totalRevenue = bookingsList.reduce((sum, b) => sum + Number(b.final_amount), 0);
@@ -293,12 +327,12 @@ export const exportRevenueReportPDF = async (
 
   autoTable(doc, {
     startY: 58,
-    head: [['Billable Amount (Rs.)', 'Discounts Given (Rs.)', 'Revenue Collected (Rs.)', 'Outstanding Balances (Rs.)']],
+    head: [['Billable Amount', 'Discounts Given', 'Revenue Collected', 'Outstanding Balances']],
     body: [[
-      `Rs.${totalRevenue.toLocaleString()}`,
-      `Rs.${totalDiscounts.toLocaleString()}`,
-      `Rs.${totalCollected.toLocaleString()}`,
-      `Rs.${totalDues.toLocaleString()}`
+      `Rs. ${totalRevenue.toLocaleString()}`,
+      `Rs. ${totalDiscounts.toLocaleString()}`,
+      `Rs. ${totalCollected.toLocaleString()}`,
+      `Rs. ${totalDues.toLocaleString()}`
     ]],
     headStyles: { 
       fillColor: [80, 80, 80], 
@@ -308,7 +342,13 @@ export const exportRevenueReportPDF = async (
     },
     bodyStyles: { textColor: TEXT_DARK, fontSize: 9, fontStyle: 'bold' },
     theme: 'grid',
-    styles: { halign: 'center', cellPadding: 3.5, lineColor: BORDER_LIGHT, lineWidth: 0.1 }
+    styles: { halign: 'center', cellPadding: 3.5, lineColor: BORDER_LIGHT, lineWidth: 0.1 },
+    columnStyles: {
+      0: { cellWidth: 60 },
+      1: { cellWidth: 60 },
+      2: { cellWidth: 60 },
+      3: { cellWidth: 60 }
+    }
   });
 
   const tableBody = bookingsList.map(b => {
@@ -316,11 +356,11 @@ export const exportRevenueReportPDF = async (
     const bookingPayments = paymentsList.filter(p => p.booking_id === b.id);
     // Build split breakdown: each method on its own line
     const paymentBreakdown = bookingPayments
-      .map(p => `${p.payment_method}: Rs.${p.amount_paid}`)
+      .map(p => `${p.payment_method}: Rs. ${p.amount_paid}`)
       .join('\n');
     const paidText = summary && summary.totalPaid > 0
-      ? `Rs.${summary.totalPaid}\n${paymentBreakdown}`
-      : 'Rs.0';
+      ? `Rs. ${summary.totalPaid}\n${paymentBreakdown}`
+      : 'Rs. 0';
 
     // Show ground as plain "Box" (strip "1"/"2" suffix like "Box 1" -> "Box")
     const groundDisplay = (b.ground?.name || 'Box').replace(/\s*\d+\s*$/, '').trim() || 'Box';
@@ -330,9 +370,9 @@ export const exportRevenueReportPDF = async (
       new Date(b.booking_date).toLocaleDateString(),
       b.customer?.name || 'Walk-in',
       groundDisplay,
-      `Rs.${b.final_amount}`,
+      `Rs. ${b.final_amount}`,
       paidText,
-      `Rs.${summary ? summary.pendingAmount : 0}`,
+      `Rs. ${summary ? summary.pendingAmount : 0}`,
       summary?.status || 'Pending'
     ];
   });
@@ -350,13 +390,32 @@ export const exportRevenueReportPDF = async (
     bodyStyles: { textColor: TEXT_DARK, fontSize: 8 },
     alternateRowStyles: { fillColor: ALT_ROW_TINT },
     theme: 'striped',
+    // Landscape page is 297mm; usable width ~269mm (14mm margins each side)
+    tableWidth: 'wrap',
     styles: { cellPadding: 3, lineColor: BORDER_LIGHT, lineWidth: 0.1, overflow: 'linebreak' },
     columnStyles: {
-      5: { cellWidth: 38 } // 'Paid' column - wider to show split amounts properly
+      0: { cellWidth: 24 },  // Ref ID
+      1: { cellWidth: 24 },  // Date
+      2: { cellWidth: 36 },  // Customer
+      3: { cellWidth: 22 },  // Ground
+      4: { cellWidth: 26 },  // Final Bill
+      5: { cellWidth: 70 },  // Paid - wide so split amounts are fully visible
+      6: { cellWidth: 22 },  // Dues
+      7: { cellWidth: 22 },  // Status
     }
   });
 
-  addPDFFooter(doc);
+  // Landscape-aware footer (landscape A4 = 210mm tall, portrait = 297mm)
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.text('Thank you for using 360 Club Box Booking Management. System generated copy.', 14, 203);
+    doc.text(`Page ${i} of ${pageCount}`, 275, 203);
+  }
+
   const rangeSlug = dateRange.toLowerCase().replace(/[^a-z0-9]+/g, '_');
   doc.save(`revenue_report_${rangeSlug}.pdf`);
 };
