@@ -1543,6 +1543,16 @@ function BookingsContent() {
         </div>
       )}
 
+      {/* Preload Lottie library and animation JSON in the background while user fills the booking form */}
+      {showAddModal && (
+        <div className="sr-only pointer-events-none absolute -left-[9999px] -top-[9999px]" aria-hidden="true">
+          <DotLottieReact
+            src="https://lottie.host/a4743664-bf1a-4e8b-bffb-e7aa229e12be/TK33CGxBKq.lottie"
+            autoplay={false}
+          />
+        </div>
+      )}
+
       {/* 2. ADD / EDIT BOOKING FORM DRAWER */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -2298,9 +2308,11 @@ function BookingsContent() {
 
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setShowAddModal(false);
                       resetBookingForm();
+                      await loadAllData();
+                      router.refresh();
                     }}
                     className="py-2.5 px-10 bg-primary hover:bg-primary/95 text-white rounded-xl text-xs font-extrabold cursor-pointer transition-all active:scale-95 shadow-md shadow-primary/10"
                   >
