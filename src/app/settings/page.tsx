@@ -37,9 +37,9 @@ export default function SettingsPage() {
   const [businessName, setBusinessName] = useState('360 Club Box');
   const [phone, setPhone] = useState('9876543210');
   const [address, setAddress] = useState('Sector 5, Sports Complex, Mumbai');
-  const [opHours, setOpHours] = useState('06:00 AM - 09:00 PM');
-  const [opStartHour, setOpStartHour] = useState('06:00');
-  const [opEndHour, setOpEndHour] = useState('22:00');
+  const [opHours, setOpHours] = useState('12:00 AM - 12:00 AM');
+  const [opStartHour, setOpStartHour] = useState('00:00');
+  const [opEndHour, setOpEndHour] = useState('24:00');
   
   // Custom Grounds configuration (Edit prices)
   const [globalRate, setGlobalRate] = useState('1200');

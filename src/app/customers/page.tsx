@@ -45,8 +45,10 @@ export default function CustomersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const allCustomers = await getCustomers();
       const allBookings = await getBookings();
@@ -83,7 +85,7 @@ export default function CustomersPage() {
 
     // 1. Tab visibility/focus listener
     const handleFocus = () => {
-      loadData();
+      loadData(true);
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleFocus);
@@ -97,35 +99,38 @@ export default function CustomersPage() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings' },
           () => {
-            loadData();
+            loadData(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'payments' },
           () => {
-            loadData();
+            loadData(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'customers' },
           () => {
-            loadData();
+            loadData(true);
           }
         )
         .subscribe();
     }
 
-    // 3. Fallback polling (every 10 seconds)
-    const interval = setInterval(() => {
-      loadData();
-    }, 10000);
+    // 3. Fallback polling (only if Supabase is NOT active, or run less frequently, e.g. every 60 seconds)
+    let interval: any = null;
+    if (!hasSupabaseCredentials() || !supabase) {
+      interval = setInterval(() => {
+        loadData(true);
+      }, 60000);
+    }
 
     return () => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleFocus);
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       if (channel && supabase) {
         supabase.removeChannel(channel);
       }

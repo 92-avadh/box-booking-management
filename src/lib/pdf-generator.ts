@@ -229,29 +229,43 @@ export const exportBookingReceiptPDF = async (
   // Totals Breakdown
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80, 80, 80);
-  doc.text('Base Price:', 130, finalY);
-  doc.text(`Rs.${booking.amount}`, 180, finalY, { align: 'right' });
+  
+  let currentYOffset = finalY;
 
-  doc.text('Applied Discount:', 130, finalY + 5);
-  doc.text(`- Rs.${booking.discount}`, 180, finalY + 5, { align: 'right' });
+  doc.text('Base Price:', 130, currentYOffset);
+  doc.text(`Rs.${booking.amount}`, 180, currentYOffset, { align: 'right' });
+  currentYOffset += 5;
+
+  if (booking.additional_amount && Number(booking.additional_amount) > 0) {
+    doc.text('Additional Amount:', 130, currentYOffset);
+    doc.text(`+ Rs.${booking.additional_amount}`, 180, currentYOffset, { align: 'right' });
+    currentYOffset += 5;
+  }
+
+  doc.text('Applied Discount:', 130, currentYOffset);
+  doc.text(`- Rs.${booking.discount}`, 180, currentYOffset, { align: 'right' });
+  currentYOffset += 5;
 
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(12, 74, 40);
-  doc.text('Net Final Bill:', 130, finalY + 10);
-  doc.text(`Rs.${booking.final_amount}`, 180, finalY + 10, { align: 'right' });
+  doc.text('Net Final Bill:', 130, currentYOffset);
+  doc.text(`Rs.${booking.final_amount}`, 180, currentYOffset, { align: 'right' });
+  currentYOffset += 5;
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80, 80, 80);
-  doc.text('Payment Type:', 130, finalY + 15);
-  doc.text(paymentTypeStr, 180, finalY + 15, { align: 'right' });
+  doc.text('Payment Type:', 130, currentYOffset);
+  doc.text(paymentTypeStr, 180, currentYOffset, { align: 'right' });
+  currentYOffset += 5;
 
   doc.setTextColor(60, 60, 60);
-  doc.text('Total Collected:', 130, finalY + 20);
-  doc.text(`Rs.${paymentSummary.totalPaid}`, 180, finalY + 20, { align: 'right' });
+  doc.text('Total Collected:', 130, currentYOffset);
+  doc.text(`Rs.${paymentSummary.totalPaid}`, 180, currentYOffset, { align: 'right' });
+  currentYOffset += 5;
 
   doc.setTextColor(180, 50, 50);
-  doc.text('Remaining Balance:', 130, finalY + 25);
-  doc.text(`Rs.${paymentSummary.pendingAmount}`, 180, finalY + 25, { align: 'right' });
+  doc.text('Remaining Balance:', 130, currentYOffset);
+  doc.text(`Rs.${paymentSummary.pendingAmount}`, 180, currentYOffset, { align: 'right' });
 
   addPDFFooter(doc);
   

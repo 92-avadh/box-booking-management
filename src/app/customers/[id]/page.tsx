@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/dashboard-layout';
 import { 
   getCustomers, 
   getBookings, 
-  getBookingPaymentSummary 
+  getBookingPaymentSummaries 
 } from '@/lib/db/db-service';
 import { Customer, Booking } from '@/lib/db/types';
 import { 
@@ -49,11 +49,8 @@ export default function CustomerDetailPage({ params }: PageProps) {
           const customerBookings = allBookings.filter(b => b.customer_id === customerId);
           setBookings(customerBookings);
 
-          // Get payment summaries
-          const summaries: typeof paymentSummaries = {};
-          for (const b of customerBookings) {
-            summaries[b.id] = await getBookingPaymentSummary(b.id);
-          }
+          // Get payment summaries in bulk (O(1) queries instead of O(N))
+          const { summaries } = await getBookingPaymentSummaries(customerBookings);
           setPaymentSummaries(summaries);
         }
       } catch (err) {
@@ -190,7 +187,8 @@ export default function CustomerDetailPage({ params }: PageProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              {/* Desktop Table (hidden on mobile) */}
+              <table className="w-full text-left border-collapse hidden sm:table">
                 <thead>
                   <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     <th className="py-3 px-5">Booking ID</th>
@@ -251,6 +249,59 @@ export default function CustomerDetailPage({ params }: PageProps) {
                   })}
                 </tbody>
               </table>
+
+              {/* Mobile Card List (visible on mobile only) */}
+              <div className="block sm:hidden divide-y divide-border/60">
+                {bookings.map((booking) => {
+                  const paySummary = paymentSummaries[booking.id];
+                  
+                  let bookingBadge = 'bg-blue-50 text-blue-800 border-blue-200'; // Upcoming
+                  if (booking.status === 'Completed') bookingBadge = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                  if (booking.status === 'Cancelled') bookingBadge = 'bg-red-50 text-red-800 border-red-200';
+
+                  let paymentBadge = 'bg-muted text-muted-foreground border-border';
+                  if (paySummary?.status === 'Paid') paymentBadge = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                  if (paySummary?.status === 'Partial') paymentBadge = 'bg-amber-50 text-amber-800 border-amber-200';
+                  if (paySummary?.status === 'Pending') paymentBadge = 'bg-red-50 text-red-800 border-red-200';
+
+                  return (
+                    <div key={booking.id} className="p-4 space-y-3 text-left">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-mono text-muted-foreground">{booking.id}</span>
+                        <span className={`inline-flex px-2 py-0.5 rounded-lg border font-bold ${bookingBadge}`}>
+                          {booking.status}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-foreground text-sm block">{booking.ground?.name || 'Ground'}</span>
+                          <span className="text-xs text-muted-foreground">{booking.start_time} - {booking.end_time}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-bold text-foreground flex items-center justify-end">
+                            <IndianRupee className="h-3 w-3" />
+                            {Number(booking.final_amount).toLocaleString('en-IN')}
+                          </span>
+                          <span className={`inline-flex px-2 py-0.5 rounded-lg border text-[9px] font-bold mt-1 ${paymentBadge}`}>
+                            {paySummary?.status || 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
+                        <span className="text-muted-foreground">{new Date(booking.booking_date).toLocaleDateString()}</span>
+                        <Link 
+                          href={`/bookings?id=${booking.id}`}
+                          className="text-xs text-primary font-bold hover:underline"
+                        >
+                          View Details
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

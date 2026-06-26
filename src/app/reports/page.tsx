@@ -6,7 +6,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { 
   getBookings, 
   getPayments, 
-  getBookingPaymentSummary 
+  getBookingPaymentSummaries 
 } from '@/lib/db/db-service';
 import { Booking, Payment } from '@/lib/db/types';
 import { 
@@ -64,14 +64,11 @@ export default function ReportsPage() {
     setLoading(true);
     try {
       const allBookings = await getBookings();
-      const allPayments = await getPayments();
       setBookings(allBookings);
-      setPayments(allPayments);
 
-      const summaries: typeof paymentSummaries = {};
-      for (const b of allBookings) {
-        summaries[b.id] = await getBookingPaymentSummary(b.id);
-      }
+      // Fetch payment summaries and payments in bulk to avoid O(N) database requests loop
+      const { summaries, payments: allPayments } = await getBookingPaymentSummaries(allBookings);
+      setPayments(allPayments);
       setPaymentSummaries(summaries);
     } catch (e) {
       console.error('Error loading reports data:', e);
@@ -235,7 +232,8 @@ export default function ReportsPage() {
               {/* BOOKINGS REPORT VIEW */}
               {selectedReportTab === 'bookings' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
+                  {/* Desktop view */}
+                  <table className="w-full border-collapse hidden sm:table">
                     <thead>
                       <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                         <th className="py-3 px-5">Ref ID</th>
@@ -263,13 +261,40 @@ export default function ReportsPage() {
                       )}
                     </tbody>
                   </table>
+
+                  {/* Mobile view */}
+                  <div className="block sm:hidden divide-y divide-border/60">
+                    {filteredBookings.length === 0 ? (
+                      <p className="text-center py-10 text-xs text-muted-foreground">No bookings recorded in this range</p>
+                    ) : (
+                      filteredBookings.map(b => (
+                        <div key={b.id} className="p-4 space-y-2 text-left">
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                            <span className="font-mono">{b.id}</span>
+                            <span>{new Date(b.booking_date).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="font-bold text-foreground text-sm block">{b.customer?.name}</span>
+                              <span className="text-xs text-muted-foreground block">{b.ground?.name}</span>
+                            </div>
+                            <span className="font-bold text-foreground text-xs">₹{b.final_amount}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground pt-1 border-t border-border/40">
+                            Time Slot: <span className="font-semibold text-foreground">{b.start_time} - {b.end_time}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* REVENUE REPORT VIEW */}
               {selectedReportTab === 'revenue' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
+                  {/* Desktop view */}
+                  <table className="w-full border-collapse hidden sm:table">
                     <thead>
                       <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                         <th className="py-3 px-5">Ref ID</th>
@@ -287,7 +312,7 @@ export default function ReportsPage() {
                       ) : (
                         filteredBookings.map(b => {
                           const pay = paymentSummaries[b.id];
-                          let statClass = 'bg-red-50 text-red-800 border-red-200';
+                          let statClass = 'bg-red-50 text-red-805 border-red-200';
                           if (pay?.status === 'Paid') statClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
                           if (pay?.status === 'Partial') statClass = 'bg-amber-50 text-amber-800 border-amber-200';
 
@@ -312,13 +337,59 @@ export default function ReportsPage() {
                       )}
                     </tbody>
                   </table>
+
+                  {/* Mobile view */}
+                  <div className="block sm:hidden divide-y divide-border/60">
+                    {filteredBookings.length === 0 ? (
+                      <p className="text-center py-10 text-xs text-muted-foreground">No revenues logged in this range</p>
+                    ) : (
+                      filteredBookings.map(b => {
+                        const pay = paymentSummaries[b.id];
+                        let statClass = 'bg-red-50 text-red-808 border-red-200';
+                        if (pay?.status === 'Paid') statClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                        if (pay?.status === 'Partial') statClass = 'bg-amber-50 text-amber-800 border-amber-200';
+
+                        return (
+                          <div key={b.id} className="p-4 space-y-2 text-left">
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                              <span className="font-mono">{b.id}</span>
+                              <span className={`inline-flex px-2 py-0.5 rounded-lg border text-[9px] font-bold ${statClass}`}>
+                                {pay?.status || 'Pending'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-bold text-foreground text-sm block">{b.customer?.name}</span>
+                              <span className="text-xs text-muted-foreground block">{new Date(b.booking_date).toLocaleDateString()}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 py-1 text-xs">
+                              <div>
+                                <span className="text-[9px] text-muted-foreground block uppercase">Bill</span>
+                                <span className="font-semibold">₹{b.final_amount}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-muted-foreground block uppercase">Paid</span>
+                                <span className="font-semibold text-emerald-700">₹{pay ? pay.totalPaid : 0}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-muted-foreground block uppercase">Dues</span>
+                                <span className={`font-bold ${pay && pay.pendingAmount > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                                  ₹{pay ? pay.pendingAmount : 0}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* PAYMENTS REPORT VIEW */}
               {selectedReportTab === 'payments' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
+                  {/* Desktop view */}
+                  <table className="w-full border-collapse hidden sm:table">
                     <thead>
                       <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                         <th className="py-3 px-5">Receipt ID</th>
@@ -353,13 +424,45 @@ export default function ReportsPage() {
                       )}
                     </tbody>
                   </table>
+
+                  {/* Mobile view */}
+                  <div className="block sm:hidden divide-y divide-border/60">
+                    {filteredPayments.length === 0 ? (
+                      <p className="text-center py-10 text-xs text-muted-foreground">No payment receipts in this range</p>
+                    ) : (
+                      filteredPayments.map(p => {
+                        const parentBooking = bookings.find(book => book.id === p.booking_id);
+                        return (
+                          <div key={p.id} className="p-4 space-y-2 text-left">
+                            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                              <span className="font-mono">Receipt: {p.id}</span>
+                              <span className="px-2 py-0.5 bg-blue-50 text-blue-800 rounded-md border border-blue-100 text-[10px] font-bold">
+                                {p.payment_method}
+                              </span>
+                            </div>
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <span className="font-bold text-foreground text-sm block">{parentBooking?.customer?.name || 'Walk-in'}</span>
+                                <span className="text-xs text-muted-foreground block">Collected: {new Date(p.payment_date).toLocaleDateString()}</span>
+                              </div>
+                              <span className="font-bold text-emerald-700 text-sm">₹{p.amount_paid}</span>
+                            </div>
+                            <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/40 font-mono">
+                              Booking Ref: {p.booking_id}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* DISCOUNTS REPORT VIEW */}
               {selectedReportTab === 'discounts' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
+                  {/* Desktop view */}
+                  <table className="w-full border-collapse hidden sm:table">
                     <thead>
                       <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                         <th className="py-3 px-5">Booking ID</th>
@@ -387,6 +490,40 @@ export default function ReportsPage() {
                       )}
                     </tbody>
                   </table>
+
+                  {/* Mobile view */}
+                  <div className="block sm:hidden divide-y divide-border/60">
+                    {filteredDiscounts.length === 0 ? (
+                      <p className="text-center py-10 text-xs text-muted-foreground">No discounts registered in this range</p>
+                    ) : (
+                      filteredDiscounts.map(b => (
+                        <div key={b.id} className="p-4 space-y-2 text-left">
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                            <span className="font-mono">{b.id}</span>
+                            <span>{new Date(b.booking_date).toLocaleDateString()}</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-foreground text-sm block">{b.customer?.name}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 py-1 text-xs">
+                            <div>
+                              <span className="text-[9px] text-muted-foreground block uppercase">Base Amount</span>
+                              <span>₹{b.amount}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] text-muted-foreground block uppercase">Discount</span>
+                              <span className="text-purple-700 font-bold">₹{b.discount}</span>
+                            </div>
+                          </div>
+                          {b.notes && (
+                            <div className="text-[10px] text-muted-foreground italic pt-1 border-t border-border/40">
+                              Reason: {b.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </div>

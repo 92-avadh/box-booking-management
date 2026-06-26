@@ -35,7 +35,8 @@ export interface Booking {
   end_time: string;     // HH:MM (e.g. "07:00")
   amount: number;       // Base amount based on hourly rate
   discount: number;     // Discount amount
-  final_amount: number; // amount - discount
+  additional_amount?: number; // Additional amount / custom charges
+  final_amount: number; // amount - discount + additional_amount
   status: BookingStatus;
   notes?: string;
   created_at: string;

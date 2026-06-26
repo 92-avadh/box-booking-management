@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/dashboard-layout';
 import { 
   getBookings, 
   getPayments, 
-  getBookingPaymentSummary,
+  getBookingPaymentSummaries,
   addPayment,
   getBookingStatus
 } from '@/lib/db/db-service';
@@ -97,18 +97,17 @@ export default function PaymentsPage() {
     }
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const allBookings = await getBookings();
-      const allPayments = await getPayments();
-      setPayments(allPayments);
       setBookings(allBookings);
 
-      const summaries: typeof paymentSummaries = {};
-      for (const b of allBookings) {
-        summaries[b.id] = await getBookingPaymentSummary(b.id);
-      }
+      // Fetch payment summaries and payments in bulk O(1) database queries
+      const { summaries, payments: allPayments } = await getBookingPaymentSummaries(allBookings);
+      setPayments(allPayments);
       setPaymentSummaries(summaries);
     } catch (e) {
       console.error(e);
@@ -122,7 +121,7 @@ export default function PaymentsPage() {
 
     // 1. Tab visibility/focus listener
     const handleFocus = () => {
-      loadData();
+      loadData(true);
     };
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleFocus);
@@ -136,35 +135,38 @@ export default function PaymentsPage() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings' },
           () => {
-            loadData();
+            loadData(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'payments' },
           () => {
-            loadData();
+            loadData(true);
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'customers' },
           () => {
-            loadData();
+            loadData(true);
           }
         )
         .subscribe();
     }
 
-    // 3. Fallback polling (every 10 seconds)
-    const interval = setInterval(() => {
-      loadData();
-    }, 10000);
+    // 3. Fallback polling (only if Supabase is NOT active, or run less frequently, e.g. every 60 seconds)
+    let interval: any = null;
+    if (!hasSupabaseCredentials() || !supabase) {
+      interval = setInterval(() => {
+        loadData(true);
+      }, 60000);
+    }
 
     return () => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleFocus);
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       if (channel && supabase) {
         supabase.removeChannel(channel);
       }
@@ -439,7 +441,8 @@ export default function PaymentsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                {/* Desktop View Table */}
+                <table className="w-full text-left border-collapse hidden sm:table">
                   <thead>
                     <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                       <th className="py-3 px-5">Booking Ref</th>
@@ -456,7 +459,7 @@ export default function PaymentsPage() {
                     {filteredBookings.map((b) => {
                       const summary = paymentSummaries[b.id];
                       
-                      let badgeStyle = 'bg-red-50 text-red-800 border-red-200';
+                      let badgeStyle = 'bg-red-50 text-red-808 border-red-200';
                       if (summary?.status === 'Paid') badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
                       if (summary?.status === 'Partial') badgeStyle = 'bg-amber-50 text-amber-800 border-amber-200';
 
@@ -520,6 +523,85 @@ export default function PaymentsPage() {
                     })}
                   </tbody>
                 </table>
+
+                {/* Mobile View Card List */}
+                <div className="block sm:hidden divide-y divide-border/60">
+                  {filteredBookings.map((b) => {
+                    const summary = paymentSummaries[b.id];
+                    let badgeStyle = 'bg-red-50 text-red-808 border-red-200';
+                    if (summary?.status === 'Paid') badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                    if (summary?.status === 'Partial') badgeStyle = 'bg-amber-50 text-amber-800 border-amber-200';
+                    
+                    return (
+                      <div key={b.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[9px] text-muted-foreground">{b.id}</span>
+                          <span className={`inline-flex px-2 py-0.5 rounded-lg border text-[10px] font-bold ${badgeStyle}`}>
+                            {summary?.status || 'Pending'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-bold text-foreground block text-sm">{b.customer?.name}</span>
+                          <span className="text-xs text-muted-foreground">{b.customer?.phone}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 py-1 text-xs">
+                          <div>
+                            <span className="text-[9px] text-muted-foreground block uppercase">Bill</span>
+                            <span className="font-semibold text-foreground">₹{Number(b.final_amount).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-muted-foreground block uppercase">Paid</span>
+                            <span className="font-semibold text-emerald-700">₹{summary ? summary.totalPaid.toLocaleString('en-IN') : 0}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-muted-foreground block uppercase">Pending</span>
+                            <span className={`font-bold ${summary && summary.pendingAmount > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
+                              ₹{summary ? summary.pendingAmount.toLocaleString('en-IN') : 0}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                          <span className="text-xs text-muted-foreground">{new Date(b.booking_date).toLocaleDateString()}</span>
+                          <div className="flex items-center gap-2">
+                            {user?.role === 'admin' && summary && summary.pendingAmount > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedBooking(b);
+                                  const pending = summary ? summary.pendingAmount : 0;
+                                  setLogAmount(pending.toString());
+                                  setLogPaymentMode('UPI');
+                                  setLogUpiSplit(pending.toString());
+                                  setLogCashSplit('0');
+                                  setLogError(null);
+                                  setShowLogModal(true);
+                                }}
+                                className="py-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                              >
+                                Collect
+                              </button>
+                            ) : (
+                              summary && summary.pendingAmount === 0 && (
+                                <span className="text-xs text-emerald-700 font-bold flex items-center gap-1">
+                                  <CheckCircle className="h-3.5 w-3.5" /> Settled
+                                </span>
+                              )
+                            )}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await exportBookingReceiptPDF(b, summary || { totalPaid: 0, pendingAmount: b.final_amount, status: 'Pending' });
+                              }}
+                              className="p-2 border border-border bg-card hover:bg-muted text-foreground/80 font-bold rounded-lg text-xs transition-all cursor-pointer inline-flex items-center justify-center"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -539,7 +621,8 @@ export default function PaymentsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                {/* Desktop View Table */}
+                <table className="w-full text-left border-collapse hidden sm:table">
                   <thead>
                     <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                       <th className="py-3 px-5">Receipt ID</th>
@@ -596,6 +679,56 @@ export default function PaymentsPage() {
                     })}
                   </tbody>
                 </table>
+
+                {/* Mobile View Card List */}
+                <div className="block sm:hidden divide-y divide-border/60">
+                  {filteredReceipts.map((p) => {
+                    const b = bookings.find(book => book.id === p.booking_id);
+                    let methodStyle = 'bg-muted text-muted-foreground border-border';
+                    if (p.payment_method === 'UPI') methodStyle = 'bg-blue-50 text-blue-800 border-blue-200';
+                    if (p.payment_method === 'Cash') methodStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+
+                    return (
+                      <div key={p.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[9px] text-muted-foreground">Receipt: {p.id}</span>
+                          <span className={`inline-flex px-2 py-0.5 rounded-lg border text-[9px] font-bold ${methodStyle}`}>
+                            {p.payment_method}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-bold text-foreground block text-sm">{b?.customer?.name || 'Customer'}</span>
+                          <span className="text-xs text-muted-foreground">{b?.customer?.phone || ''}</span>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
+                          <div>
+                            <span className="text-[9px] text-muted-foreground block uppercase">Collected On</span>
+                            <span className="text-foreground">{new Date(p.payment_date).toLocaleDateString()}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-muted-foreground block uppercase">Amount</span>
+                            <span className="font-bold text-emerald-700 text-sm">₹{Number(p.amount_paid).toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
+                          <span className="font-mono text-[9px] text-muted-foreground">Booking: {p.booking_id}</span>
+                          {b && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const summary = paymentSummaries[p.booking_id] || { totalPaid: Number(p.amount_paid), pendingAmount: 0, status: 'Paid' };
+                                await exportBookingReceiptPDF(b, summary);
+                              }}
+                              className="p-2 border border-border bg-card hover:bg-muted text-foreground/80 font-bold rounded-lg text-xs transition-all cursor-pointer inline-flex items-center justify-center"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

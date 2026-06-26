@@ -109,11 +109,16 @@ export default function DashboardPage() {
           return payDate.getMonth() === currentMonth && payDate.getFullYear() === currentYear;
         }).reduce((sum, pay) => sum + Number(pay.amount_paid), 0);
 
-        // Pending Payments
+        // Pending Payments (calculated in memory to avoid N+1 queries)
+        const paymentsByBooking: Record<string, number> = {};
+        for (const pay of p) {
+          paymentsByBooking[pay.booking_id] = (paymentsByBooking[pay.booking_id] || 0) + Number(pay.amount_paid);
+        }
         let totalDues = 0;
         for (const booking of b.filter(book => book.status !== 'Cancelled')) {
-          const summary = await getBookingPaymentSummary(booking.id);
-          totalDues += summary.pendingAmount;
+          const totalPaid = paymentsByBooking[booking.id] || 0;
+          const finalAmount = Number(booking.final_amount) || 0;
+          totalDues += Math.max(0, finalAmount - totalPaid);
         }
 
         setStats({

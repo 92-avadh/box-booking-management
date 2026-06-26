@@ -14,13 +14,14 @@ import {
   getGrounds, 
   getCustomers, 
   getBookings, 
+  createCustomer, 
   createBooking, 
   updateBooking, 
   softDeleteBooking,
+  getBookingPaymentSummaries,
   addPayment,
-  getBookingPaymentSummary,
-  createCustomer,
-  getBookingStatus
+  getBookingStatus,
+  updateGroundsRate
 } from '@/lib/db/db-service';
 import { Ground, Customer, Booking, BookingStatus, PaymentMethod, PaymentStatus } from '@/lib/db/types';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -99,12 +100,13 @@ function BookingsContent() {
   // Booking Form States
   const [formGroundId, setFormGroundId] = useState('');
   const [formDate, setFormDate] = useState('');
-  const [formStartTime, setFormStartTime] = useState('06:00');
-  const [formEndTime, setFormEndTime] = useState('07:00');
+  const [formStartTime, setFormStartTime] = useState('00:00');
+  const [formEndTime, setFormEndTime] = useState('01:00');
   const [formCustomerId, setFormCustomerId] = useState('');
   const [formCustName, setFormCustName] = useState('');
   const [formCustPhone, setFormCustPhone] = useState('');
   const [formDiscount, setFormDiscount] = useState<string>('0');
+  const [formAdditionalAmount, setFormAdditionalAmount] = useState<string>('0');
   const [formNotes, setFormNotes] = useState('');
   const [formInitialPayment, setFormInitialPayment] = useState<string>('0');
   const [formInitialPaymentMethod, setFormInitialPaymentMethod] = useState<PaymentMethod>('UPI');
@@ -112,8 +114,8 @@ function BookingsContent() {
   const [formSubmitting, setFormSubmitting] = useState(false);
 
   // Operating Time Range
-  const [opStartHour, setOpStartHour] = useState('06:00');
-  const [opEndHour, setOpEndHour] = useState('22:00');
+  const [opStartHour, setOpStartHour] = useState('00:00');
+  const [opEndHour, setOpEndHour] = useState('24:00');
 
   // Dynamic time slots generation
   const getVisibleTimeSlots = () => {
@@ -469,7 +471,8 @@ function BookingsContent() {
   const calculateFinalAmount = () => {
     const total = calculateTotalPrice();
     const discount = Number(formDiscount) || 0;
-    return Math.max(0, total - discount);
+    const additional = Number(formAdditionalAmount) || 0;
+    return Math.max(0, total - discount + additional);
   };
 
   // Handles split payment input sync
@@ -517,13 +520,9 @@ function BookingsContent() {
       setCustomers(c);
       setBookings(b);
 
-      // Fetch payment summaries
-      const summaries: Record<string, { totalPaid: number; pendingAmount: number; status: string }> = {};
-      for (const booking of b) {
-        summaries[booking.id] = await getBookingPaymentSummary(booking.id);
-      }
+      // Fetch payment summaries in bulk O(1) queries instead of O(N) loop queries
+      const { summaries } = await getBookingPaymentSummaries(b);
       setPaymentSummaries(summaries);
-
 
     } catch (e: any) {
       console.error(e);
@@ -572,15 +571,18 @@ function BookingsContent() {
         .subscribe();
     }
 
-    // 3. Fallback polling (every 10 seconds)
-    const interval = setInterval(() => {
-      loadAllData(true);
-    }, 10000);
+    // 3. Fallback polling (only if Supabase is NOT active, or run less frequently, e.g. every 60 seconds)
+    let interval: any = null;
+    if (!hasSupabaseCredentials() || !supabase) {
+      interval = setInterval(() => {
+        loadAllData(true);
+      }, 60000);
+    }
 
     return () => {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleFocus);
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       if (channel && supabase) {
         supabase.removeChannel(channel);
       }
@@ -709,6 +711,7 @@ function BookingsContent() {
       const calculatedAmount = calculateTotalPrice();
       const calculatedFinalAmount = calculateFinalAmount();
       const discountVal = Number(formDiscount) || 0;
+      const additionalVal = Number(formAdditionalAmount) || 0;
 
       const groundObj = grounds.find(g => g.id === formGroundId);
       const groundName = groundObj ? groundObj.name : 'Selected Turf';
@@ -731,6 +734,7 @@ function BookingsContent() {
           end_time: maxEnd,
           amount: calculatedAmount,
           discount: discountVal,
+          additional_amount: additionalVal,
           final_amount: calculatedFinalAmount,
           status: editStatus,
           notes: sanitizedNotes,
@@ -768,7 +772,8 @@ function BookingsContent() {
           }
           const groupBaseAmount = slotList.reduce((sum, s) => sum + getSlotPrice(formGroundId, formDate, s), 0);
           const shareOfDiscount = Math.round((groupBaseAmount / calculatedAmount) * discountVal);
-          const finalAmount = Math.max(0, groupBaseAmount - shareOfDiscount);
+          const shareOfAdditional = Math.round((groupBaseAmount / calculatedAmount) * additionalVal);
+          const finalAmount = Math.max(0, groupBaseAmount - shareOfDiscount + shareOfAdditional);
 
           return {
             customer_id: finalCustId,
@@ -778,6 +783,7 @@ function BookingsContent() {
             end_time: group.endTime,
             amount: groupBaseAmount,
             discount: shareOfDiscount,
+            additional_amount: shareOfAdditional,
             final_amount: finalAmount,
             status: 'Confirmed' as BookingStatus,
             notes: sanitizedNotes
@@ -787,7 +793,7 @@ function BookingsContent() {
         // Loop to insert bookings
         const createdBookings: Booking[] = [];
         for (const bPayload of bookingsToCreate) {
-          const newB = await createBooking(bPayload, user?.email);
+          const newB = await createBooking(bPayload as any, user?.email);
           createdBookings.push(newB);
           createdBookingIds.push(newB.id);
         }
@@ -912,6 +918,7 @@ function BookingsContent() {
     setFormCustPhone('');
     setFormCustomerId('');
     setFormDiscount('0');
+    setFormAdditionalAmount('0');
     setFormNotes('');
     setPaymentMode('UPI');
     setPaymentAmount('');
@@ -946,6 +953,7 @@ function BookingsContent() {
     setSelectedSlots(slots);
     
     setFormDiscount(booking.discount.toString());
+    setFormAdditionalAmount((booking.additional_amount || 0).toString());
     setFormNotes(booking.notes || '');
     setEditStatus(booking.status);
     
@@ -1677,6 +1685,17 @@ function BookingsContent() {
                     </span>
                   </div>
                 </div>
+
+                {/* Breakdown details */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground font-semibold px-1">
+                  <span>Base Rate: ₹{selectedBooking.amount}</span>
+                  {selectedBooking.additional_amount && Number(selectedBooking.additional_amount) > 0 ? (
+                    <span className="text-emerald-800">Additional Charge: +₹{selectedBooking.additional_amount}</span>
+                  ) : null}
+                  {selectedBooking.discount && Number(selectedBooking.discount) > 0 ? (
+                    <span className="text-red-650">Discount: -₹{selectedBooking.discount}</span>
+                  ) : null}
+                </div>
               </div>
 
               {/* Actions Footer */}
@@ -1791,7 +1810,7 @@ function BookingsContent() {
                         }`}>
                           {wizardStep > step.s ? <Check className="h-4 w-4" /> : step.s}
                         </div>
-                        <span className={`text-[9px] font-bold tracking-tight uppercase ${
+                        <span className={`text-[9px] font-bold tracking-tight uppercase hidden sm:block ${
                           wizardStep === step.s ? 'text-primary' : 'text-muted-foreground/80'
                         }`}>
                           {step.label}
@@ -2271,8 +2290,8 @@ function BookingsContent() {
                       </div>
                     </div>
 
-                    {/* Discount and Notes */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Discount, Additional Amount and Notes */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Discount (₹)</label>
                         <input
@@ -2281,6 +2300,17 @@ function BookingsContent() {
                           max={calculateTotalPrice()}
                           value={formDiscount}
                           onChange={(e) => setFormDiscount(e.target.value)}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="w-full px-3 py-2 bg-muted/25 border border-border rounded-xl text-[16px] sm:text-xs font-bold focus:outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Additional Amount (₹)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={formAdditionalAmount}
+                          onChange={(e) => setFormAdditionalAmount(e.target.value)}
                           onWheel={(e) => e.currentTarget.blur()}
                           className="w-full px-3 py-2 bg-muted/25 border border-border rounded-xl text-[16px] sm:text-xs font-bold focus:outline-none"
                         />
@@ -2303,6 +2333,12 @@ function BookingsContent() {
                         <span>Total Booked Rate:</span>
                         <span>₹{calculateTotalPrice()}</span>
                       </div>
+                      {Number(formAdditionalAmount) > 0 && (
+                        <div className="flex justify-between font-semibold text-emerald-800">
+                          <span>Additional Amount:</span>
+                          <span>+₹{Number(formAdditionalAmount) || 0}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between font-semibold text-red-650">
                         <span>Discount:</span>
                         <span>-₹{Number(formDiscount) || 0}</span>

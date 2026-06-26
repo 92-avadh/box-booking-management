@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     end_time TIME NOT NULL, -- e.g., '19:00:00'
     amount DECIMAL(10, 2) NOT NULL,
     discount DECIMAL(10, 2) DEFAULT 0.00 NOT NULL,
+    additional_amount DECIMAL(10, 2) DEFAULT 0.00 NOT NULL,
     final_amount DECIMAL(10, 2) NOT NULL,
     status VARCHAR(50) DEFAULT 'Confirmed' CHECK (status IN ('Confirmed', 'Completed', 'Cancelled')) NOT NULL,
     notes TEXT,

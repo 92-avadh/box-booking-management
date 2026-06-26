@@ -408,6 +408,37 @@ export const getBookingPaymentSummary = async (bookingId: string) => {
   return mockDb.getBookingPaymentSummary(bookingId);
 };
 
+export const getBookingPaymentSummaries = async (bookings: Booking[]) => {
+  const payments = await getPayments();
+  const summaries: Record<string, { totalPaid: number; pendingAmount: number; status: PaymentStatus }> = {};
+  
+  // Group payments by booking_id
+  const paymentsByBooking: Record<string, number> = {};
+  for (const p of payments) {
+    paymentsByBooking[p.booking_id] = (paymentsByBooking[p.booking_id] || 0) + Number(p.amount_paid);
+  }
+  
+  for (const b of bookings) {
+    const totalPaid = paymentsByBooking[b.id] || 0;
+    const finalAmount = Number(b.final_amount) || 0;
+    const pendingAmount = Math.max(0, finalAmount - totalPaid);
+    
+    let status: PaymentStatus = 'Pending';
+    if (totalPaid >= finalAmount && finalAmount > 0) {
+      status = 'Paid';
+    } else if (totalPaid > 0) {
+      status = 'Partial';
+    }
+    
+    summaries[b.id] = {
+      totalPaid,
+      pendingAmount,
+      status
+    };
+  }
+  return { summaries, payments };
+};
+
 export const addPayment = async (
   paymentData: Omit<Payment, 'id' | 'payment_date'>,
   userEmail: string = 'dhameliyaavadh592@gmail.com'
