@@ -288,6 +288,7 @@ export default function LoginPage() {
         const maskedEmail = `${maskedLocal}@${parts[1]}`;
 
         setResetSuccess(`Password reset link sent to ${maskedEmail}! Please check your email inbox.`);
+        setResetInput(''); // Clear the email field after successful submission
       } else {
         setResetSuccess(`Mock Mode: Reset link generated for ${email}! Redirect target: /login/reset-password`);
       }
