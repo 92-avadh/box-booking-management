@@ -150,16 +150,16 @@ export const exportBookingReceiptPDF = async (
   let paymentTypeStr = 'None';
   if (bookingPayments.length > 0) {
     const activeMethods = [];
-    if (cashTotal > 0) activeMethods.push(`Cash: ₹${cashTotal}`);
-    if (upiTotal > 0) activeMethods.push(`UPI: ₹${upiTotal}`);
-    if (cardTotal > 0) activeMethods.push(`Card: ₹${cardTotal}`);
-    if (bankTotal > 0) activeMethods.push(`Bank: ₹${bankTotal}`);
+    if (cashTotal > 0) activeMethods.push(`Cash: Rs.${cashTotal}`);
+    if (upiTotal > 0) activeMethods.push(`UPI: Rs.${upiTotal}`);
+    if (cardTotal > 0) activeMethods.push(`Card: Rs.${cardTotal}`);
+    if (bankTotal > 0) activeMethods.push(`Bank: Rs.${bankTotal}`);
 
     if (activeMethods.length > 1) {
       paymentTypeStr = `Split (${activeMethods.join(', ')})`;
     } else {
       const singleMethod = bookingPayments[0].payment_method;
-      paymentTypeStr = `${singleMethod} (₹${paymentSummary.totalPaid})`;
+      paymentTypeStr = `${singleMethod} (Rs.${paymentSummary.totalPaid})`;
     }
   }
 
@@ -190,12 +190,12 @@ export const exportBookingReceiptPDF = async (
   
   autoTable(doc, {
     startY: 85,
-    head: [['Item Description', 'Unit Cost (₹/hr)', 'Duration (hrs)', 'Total Base (₹)']],
+    head: [['Item Description', 'Unit Cost (Rs./hr)', 'Duration (hrs)', 'Total Base (Rs.)']],
     body: [[
       `Turf rental for ${booking.ground?.name || 'Ground'}`,
-      `₹${booking.ground?.hourly_rate || 1200}`,
+      `Rs.${booking.ground?.hourly_rate || 1200}`,
       `${hours.toFixed(1)} hrs`,
-      `₹${booking.amount}`
+      `Rs.${booking.amount}`
     ]],
     headStyles: { 
       fillColor: PRIMARY_GREEN, 
@@ -230,15 +230,15 @@ export const exportBookingReceiptPDF = async (
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80, 80, 80);
   doc.text('Base Price:', 130, finalY);
-  doc.text(`₹${booking.amount}`, 180, finalY, { align: 'right' });
+  doc.text(`Rs.${booking.amount}`, 180, finalY, { align: 'right' });
 
   doc.text('Applied Discount:', 130, finalY + 5);
-  doc.text(`- ₹${booking.discount}`, 180, finalY + 5, { align: 'right' });
+  doc.text(`- Rs.${booking.discount}`, 180, finalY + 5, { align: 'right' });
 
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(12, 74, 40);
   doc.text('Net Final Bill:', 130, finalY + 10);
-  doc.text(`₹${booking.final_amount}`, 180, finalY + 10, { align: 'right' });
+  doc.text(`Rs.${booking.final_amount}`, 180, finalY + 10, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(80, 80, 80);
@@ -247,11 +247,11 @@ export const exportBookingReceiptPDF = async (
 
   doc.setTextColor(60, 60, 60);
   doc.text('Total Collected:', 130, finalY + 20);
-  doc.text(`₹${paymentSummary.totalPaid}`, 180, finalY + 20, { align: 'right' });
+  doc.text(`Rs.${paymentSummary.totalPaid}`, 180, finalY + 20, { align: 'right' });
 
   doc.setTextColor(180, 50, 50);
   doc.text('Remaining Balance:', 130, finalY + 25);
-  doc.text(`₹${paymentSummary.pendingAmount}`, 180, finalY + 25, { align: 'right' });
+  doc.text(`Rs.${paymentSummary.pendingAmount}`, 180, finalY + 25, { align: 'right' });
 
   addPDFFooter(doc);
   
@@ -293,12 +293,12 @@ export const exportRevenueReportPDF = async (
 
   autoTable(doc, {
     startY: 58,
-    head: [['Billable Amount (₹)', 'Discounts Given (₹)', 'Revenue Collected (₹)', 'Outstanding Balances (₹)']],
+    head: [['Billable Amount (Rs.)', 'Discounts Given (Rs.)', 'Revenue Collected (Rs.)', 'Outstanding Balances (Rs.)']],
     body: [[
-      `₹${totalRevenue.toLocaleString()}`,
-      `₹${totalDiscounts.toLocaleString()}`,
-      `₹${totalCollected.toLocaleString()}`,
-      `₹${totalDues.toLocaleString()}`
+      `Rs.${totalRevenue.toLocaleString()}`,
+      `Rs.${totalDiscounts.toLocaleString()}`,
+      `Rs.${totalCollected.toLocaleString()}`,
+      `Rs.${totalDues.toLocaleString()}`
     ]],
     headStyles: { 
       fillColor: [80, 80, 80], 
@@ -314,19 +314,25 @@ export const exportRevenueReportPDF = async (
   const tableBody = bookingsList.map(b => {
     const summary = paymentSummaries[b.id];
     const bookingPayments = paymentsList.filter(p => p.booking_id === b.id);
-    const paymentBreakdown = bookingPayments.map(p => `${p.payment_method}: ₹${p.amount_paid}`).join(', ');
+    // Build split breakdown: each method on its own line
+    const paymentBreakdown = bookingPayments
+      .map(p => `${p.payment_method}: Rs.${p.amount_paid}`)
+      .join('\n');
     const paidText = summary && summary.totalPaid > 0
-      ? `₹${summary.totalPaid}\n(${paymentBreakdown})`
-      : '₹0';
+      ? `Rs.${summary.totalPaid}\n${paymentBreakdown}`
+      : 'Rs.0';
+
+    // Show ground as plain "Box" (strip "1"/"2" suffix like "Box 1" -> "Box")
+    const groundDisplay = (b.ground?.name || 'Box').replace(/\s*\d+\s*$/, '').trim() || 'Box';
 
     return [
       b.id.substring(0, 8),
       new Date(b.booking_date).toLocaleDateString(),
       b.customer?.name || 'Walk-in',
-      b.ground?.name.split(' (')[0] || 'Ground',
-      `₹${b.final_amount}`,
+      groundDisplay,
+      `Rs.${b.final_amount}`,
       paidText,
-      `₹${summary ? summary.pendingAmount : 0}`,
+      `Rs.${summary ? summary.pendingAmount : 0}`,
       summary?.status || 'Pending'
     ];
   });
@@ -344,7 +350,10 @@ export const exportRevenueReportPDF = async (
     bodyStyles: { textColor: TEXT_DARK, fontSize: 8 },
     alternateRowStyles: { fillColor: ALT_ROW_TINT },
     theme: 'striped',
-    styles: { cellPadding: 3, lineColor: BORDER_LIGHT, lineWidth: 0.1 }
+    styles: { cellPadding: 3, lineColor: BORDER_LIGHT, lineWidth: 0.1, overflow: 'linebreak' },
+    columnStyles: {
+      5: { cellWidth: 38 } // 'Paid' column - wider to show split amounts properly
+    }
   });
 
   addPDFFooter(doc);
@@ -375,7 +384,7 @@ export const exportPaymentsReportPDF = async (
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(50, 50, 50);
   doc.text(`Total Transactions Count: ${paymentsList.length}`, 14, 60);
-  doc.text(`Total Volume Collected: ₹${totalCollected.toLocaleString('en-IN')}`, 14, 65);
+  doc.text(`Total Volume Collected: Rs.${totalCollected.toLocaleString('en-IN')}`, 14, 65);
 
   const tableBody = paymentsList.map(p => {
     const booking = bookingsList.find(b => b.id === p.booking_id);
@@ -385,7 +394,7 @@ export const exportPaymentsReportPDF = async (
       booking?.customer?.name || 'Customer',
       new Date(p.payment_date).toLocaleDateString(),
       p.payment_method,
-      `₹${p.amount_paid}`
+      `Rs.${p.amount_paid}`
     ];
   });
 
@@ -433,15 +442,15 @@ export const exportDiscountReportPDF = async (
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(50, 50, 50);
   doc.text(`Total Discounted Bookings: ${discountedBookings.length}`, 14, 60);
-  doc.text(`Total Discount Sum: ₹${totalDiscounts.toLocaleString('en-IN')}`, 14, 65);
+  doc.text(`Total Discount Sum: Rs.${totalDiscounts.toLocaleString('en-IN')}`, 14, 65);
 
   const tableBody = discountedBookings.map(b => [
     b.id.substring(0, 8),
     new Date(b.booking_date).toLocaleDateString(),
     b.customer?.name || 'Customer',
     formatPhone(b.customer?.phone),
-    `₹${b.amount}`,
-    `₹${b.discount}`,
+    `Rs.${b.amount}`,
+    `Rs.${b.discount}`,
     b.notes || 'Regular Discount'
   ]);
 
