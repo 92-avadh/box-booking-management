@@ -3,6 +3,32 @@ import { hasSupabaseCredentials, supabase } from './supabase';
 import * as mockDb from './mock-db';
 import { Ground, Customer, Booking, Payment, ActivityLog, PaymentStatus, User } from './types';
 
+// Hardcoded partners defined as fallback/direct accounts (bypassing Supabase SMTP limits)
+export const HARDCODED_PARTNERS: User[] = [
+  {
+    id: '93a86c6b-9c3f-4271-9c6f-c1fdf4d7fca1',
+    email: 'partner1@gmail.com',
+    phone: '9328021142',
+    role: 'partner',
+    created_at: '2026-06-26T06:00:00.000Z'
+  },
+  {
+    id: 'ad9e5590-db0e-4001-8bf7-df427e1f6e2a',
+    email: 'partner2@gmail.com',
+    phone: '9426481232',
+    role: 'partner',
+    created_at: '2026-06-26T06:00:00.000Z'
+  },
+  {
+    id: 'a3f01ab3-27e1-4c6e-bfbf-2b7e0129cd8a',
+    email: 'partner3@gmail.com',
+    phone: '9499745268',
+    role: 'partner',
+    created_at: '2026-06-26T06:00:00.000Z'
+  }
+];
+
+
 const normalizeTime = (t: string): string => {
   if (!t) return '';
   return t.substring(0, 5);
@@ -459,6 +485,21 @@ export const logActivity = async (action: string, userEmail: string = 'dhameliya
 
 // 6. User Profiles Services
 export const getUserProfileByPhone = async (phone: string): Promise<User | null> => {
+  // Check hardcoded partners
+  const hcPartner = HARDCODED_PARTNERS.find(u => u.phone === phone);
+  if (hcPartner) return hcPartner;
+
+  // Check new admin
+  if (phone === '9824416051') {
+    return {
+      id: 'c952ced9-32ab-4dd7-8bc8-607d5f3a5a67',
+      email: 'cricetclub267@gmail.com',
+      phone: '9824416051',
+      role: 'admin',
+      created_at: '2026-06-26T05:48:09.901189+00:00'
+    };
+  }
+
   if (useSupabase() && supabase) {
     const { data, error } = await supabase
       .from('users')
@@ -477,6 +518,20 @@ export const getUserProfileByPhone = async (phone: string): Promise<User | null>
 };
 
 export const getUserProfileByEmail = async (email: string): Promise<User | null> => {
+  const normalizedEmail = email.toLowerCase().trim();
+  const hcPartner = HARDCODED_PARTNERS.find(u => u.email.toLowerCase() === normalizedEmail);
+  if (hcPartner) return hcPartner;
+
+  if (normalizedEmail === 'cricetclub267@gmail.com') {
+    return {
+      id: 'c952ced9-32ab-4dd7-8bc8-607d5f3a5a67',
+      email: 'cricetclub267@gmail.com',
+      phone: '9824416051',
+      role: 'admin',
+      created_at: '2026-06-26T05:48:09.901189+00:00'
+    };
+  }
+
   if (useSupabase() && supabase) {
     const { data, error } = await supabase
       .from('users')
@@ -514,6 +569,7 @@ export const createUserProfile = async (
 };
 
 export const getPartners = async (): Promise<User[]> => {
+  let dbPartners: User[] = [];
   if (useSupabase() && supabase) {
     const { data, error } = await supabase
       .from('users')
@@ -525,10 +581,21 @@ export const getPartners = async (): Promise<User[]> => {
       handleDbError(error);
       throw new Error(`Database error: ${error.message}`);
     }
-    return data || [];
+    dbPartners = data || [];
+  } else {
+    const mockUsers = mockDb.getUsers();
+    dbPartners = mockUsers.filter(u => u.role === 'partner');
   }
-  const mockUsers = mockDb.getUsers();
-  return mockUsers.filter(u => u.role === 'partner');
+
+  // Merge hardcoded partners and database partners, avoiding duplicates
+  const allPartners = [...HARDCODED_PARTNERS];
+  dbPartners.forEach(dbP => {
+    if (!allPartners.some(hcP => hcP.email.toLowerCase() === dbP.email.toLowerCase() || hcP.phone === dbP.phone)) {
+      allPartners.push(dbP);
+    }
+  });
+
+  return allPartners;
 };
 
 export const getBookingStatus = (booking: Booking): 'Booked' | 'Running' | 'Completed' | 'Cancelled' => {

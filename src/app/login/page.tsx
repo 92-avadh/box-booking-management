@@ -119,34 +119,34 @@ export default function LoginPage() {
 
     try {
       // 1. Direct local admin check
-      if (sanitizedPhone === '9909108527' && sanitizedPassword === 'Admin@123') {
+      if (sanitizedPhone === '9824416051' && sanitizedPassword === 'Yug@godhani') {
         if (hasSupabaseCredentials() && supabase) {
           try {
             const { error: authError } = await supabase.auth.signInWithPassword({
-              email: 'dhameliyaavadh592@gmail.com',
-              password: 'Admin@123',
+              email: 'cricetclub267@gmail.com',
+              password: 'Yug@godhani',
             });
             if (authError) {
               console.warn('Supabase admin login session error:', authError.message);
               if (authError.message.includes('Invalid login credentials') || authError.status === 400) {
                 console.log('Admin not found in Supabase Auth. Attempting auto-registration...');
                 const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                  email: 'dhameliyaavadh592@gmail.com',
-                  password: 'Admin@123',
+                  email: 'cricetclub267@gmail.com',
+                  password: 'Yug@godhani',
                 });
                 if (!signUpError && signUpData.user) {
                   console.log('Admin registered in Supabase Auth successfully!');
                   // Create user profile in public.users table
                   await createUserProfile({
                     id: signUpData.user.id,
-                    email: 'dhameliyaavadh592@gmail.com',
-                    phone: '9909108527',
+                    email: 'cricetclub267@gmail.com',
+                    phone: '9824416051',
                     role: 'admin'
                   });
                   // Sign in again to establish session
                   await supabase.auth.signInWithPassword({
-                    email: 'dhameliyaavadh592@gmail.com',
-                    password: 'Admin@123',
+                    email: 'cricetclub267@gmail.com',
+                    password: 'Yug@godhani',
                   });
                 } else {
                   console.error('Admin auto-registration failed:', signUpError?.message);
@@ -157,10 +157,33 @@ export default function LoginPage() {
             console.error('Supabase admin login session error:', e);
           }
         }
-        login('dhameliyaavadh592@gmail.com', 'admin');
-        await logActivity('Admin logged in', 'dhameliyaavadh592@gmail.com');
+        login('cricetclub267@gmail.com', 'admin');
+        await logActivity('Admin logged in', 'cricetclub267@gmail.com');
         resetRateLimit('login_attempts');
         showToast('Welcome back, Admin!', 'success');
+        router.push('/dashboard');
+        return;
+      }
+
+      // 1.1 Direct partner login check (Bypass Supabase SMTP limitation)
+      const partnerCredentials: Record<string, string> = {
+        '9328021142': 'Subham@bhojani', // partner1@gmail.com
+        '9426481232': 'Yatin@navdiya',  // partner2@gmail.com
+        '9499745268': 'Subham@sivo',    // partner3@gmail.com
+      };
+
+      const expectedPassword = partnerCredentials[sanitizedPhone];
+      if (expectedPassword && sanitizedPassword === expectedPassword) {
+        const partnerEmails: Record<string, string> = {
+          '9328021142': 'partner1@gmail.com',
+          '9426481232': 'partner2@gmail.com',
+          '9499745268': 'partner3@gmail.com',
+        };
+        const email = partnerEmails[sanitizedPhone];
+        login(email, 'partner');
+        await logActivity('Partner logged in (Direct credentials)', email);
+        resetRateLimit('login_attempts');
+        showToast('Welcome back, Partner!', 'success');
         router.push('/dashboard');
         return;
       }
