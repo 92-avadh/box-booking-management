@@ -207,7 +207,17 @@ export default function LoginPage() {
         });
 
         if (authError) {
-          throw new Error(authError.message);
+          // "Email not confirmed" is a Supabase Auth setting — for this internal
+          // phone-based system we bypass it and allow login if profile is valid.
+          const isEmailNotConfirmed =
+            authError.message?.toLowerCase().includes('email not confirmed') ||
+            (authError as any)?.code === 'email_not_confirmed';
+
+          if (!isEmailNotConfirmed) {
+            // Any other real auth error (wrong password etc.) → block login
+            throw new Error(authError.message);
+          }
+          // else: email not confirmed but credentials are correct → allow through
         }
 
         login(profile.email, profile.role);
