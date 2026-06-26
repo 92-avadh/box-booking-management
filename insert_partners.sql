@@ -1,5 +1,5 @@
 -- SQL script to insert the three partner accounts directly into Supabase Auth and Public Users schema.
--- Copy and run this script in your Supabase SQL Editor (https://supabase.com/dashboard/project/ukfalpslqonxoaadzupb/sql/new)
+-- Copy and run this script in your Supabase SQL Editor
 
 -- Enable pgcrypto extension if not already enabled (for password hashing)
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -16,8 +16,7 @@ INSERT INTO auth.users (
   created_at,
   updated_at,
   role,
-  phone,
-  confirmed_at
+  phone
 ) VALUES (
   '93a86c6b-9c3f-4271-9c6f-c1fdf4d7fca1',
   '00000000-0000-0000-0000-000000000000',
@@ -29,8 +28,7 @@ INSERT INTO auth.users (
   now(),
   now(),
   'authenticated',
-  '9328021142',
-  now()
+  '9328021142'
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.users (
@@ -60,8 +58,7 @@ INSERT INTO auth.users (
   created_at,
   updated_at,
   role,
-  phone,
-  confirmed_at
+  phone
 ) VALUES (
   'ad9e5590-db0e-4001-8bf7-df427e1f6e2a',
   '00000000-0000-0000-0000-000000000000',
@@ -73,8 +70,7 @@ INSERT INTO auth.users (
   now(),
   now(),
   'authenticated',
-  '9426481232',
-  now()
+  '9426481232'
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.users (
@@ -104,8 +100,7 @@ INSERT INTO auth.users (
   created_at,
   updated_at,
   role,
-  phone,
-  confirmed_at
+  phone
 ) VALUES (
   'a3f01ab3-27e1-4c6e-bfbf-2b7e0129cd8a',
   '00000000-0000-0000-0000-000000000000',
@@ -117,8 +112,7 @@ INSERT INTO auth.users (
   now(),
   now(),
   'authenticated',
-  '9499745268',
-  now()
+  '9499745268'
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.users (
