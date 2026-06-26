@@ -818,6 +818,9 @@ function BookingsContent() {
     setCustomerSearchQuery('');
     setBookingSuccessData(null);
     setFormError(null);
+    setWizardStep(1);
+    setIsEditing(false);
+    setEditBookingId(null);
     
     const today = new Date();
     setCalendarYear(today.getFullYear());

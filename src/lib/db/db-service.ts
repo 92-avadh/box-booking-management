@@ -46,8 +46,7 @@ export const getGrounds = async (): Promise<Ground[]> => {
     
     if (error) {
       handleDbError(error);
-      console.error('Supabase getGrounds error, falling back to mock:', error);
-      return mockDb.getGrounds();
+      throw new Error(`Database error: ${error.message}`);
     }
     
     // Auto-seed grounds if table is empty and user is authenticated
@@ -135,8 +134,7 @@ export const getCustomers = async (): Promise<Customer[]> => {
     
     if (error) {
       handleDbError(error);
-      console.error('Supabase getCustomers error, falling back to mock:', error);
-      return mockDb.getCustomers();
+      throw new Error(`Database error: ${error.message}`);
     }
     return data || [];
   }
@@ -168,8 +166,7 @@ export const createCustomer = async (name: string, phone: string): Promise<Custo
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase createCustomer error, falling back to mock:', error);
-      return mockDb.createCustomer(name, phone);
+      throw new Error(`Database error: ${error.message}`);
     }
     
     await logActivity(`Created customer: ${name} (${phone})`);
@@ -193,8 +190,7 @@ export const getBookings = async (): Promise<Booking[]> => {
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase getBookings error, falling back to mock:', error);
-      return mockDb.getBookings();
+      throw new Error(`Database error: ${error.message}`);
     }
     return data || [];
   }
@@ -240,8 +236,7 @@ export const createBooking = async (
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase createBooking error, falling back to mock:', error);
-      return mockDb.createBooking(bookingData, userEmail);
+      throw new Error(`Database error: ${error.message}`);
     }
 
     // Get customer name for logging
@@ -298,8 +293,7 @@ export const updateBooking = async (
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase updateBooking error, falling back to mock:', error);
-      return mockDb.updateBooking(updatedBooking, userEmail);
+      throw new Error(`Database error: ${error.message}`);
     }
 
     await logActivity(`Updated booking ${updatedBooking.id} details`, userEmail);
@@ -320,8 +314,7 @@ export const softDeleteBooking = async (
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase softDeleteBooking error, falling back to mock:', error);
-      return mockDb.softDeleteBooking(bookingId, userEmail);
+      throw new Error(`Database error: ${error.message}`);
     }
 
     await logActivity(`Deleted booking ${bookingId} (Soft Delete)`, userEmail);
@@ -340,8 +333,7 @@ export const getPayments = async (): Promise<Payment[]> => {
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase getPayments error, falling back to mock:', error);
-      return mockDb.getPayments();
+      throw new Error(`Database error: ${error.message}`);
     }
     return data || [];
   }
@@ -409,8 +401,7 @@ export const addPayment = async (
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase addPayment error, falling back to mock:', error);
-      return mockDb.addPayment(paymentData, userEmail);
+      throw new Error(`Database error: ${error.message}`);
     }
 
     // Fetch booking details for logging
@@ -444,8 +435,7 @@ export const getActivityLogs = async (): Promise<ActivityLog[]> => {
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase getActivityLogs error, falling back to mock:', error);
-      return mockDb.getActivityLogs();
+      throw new Error(`Database error: ${error.message}`);
     }
     return data || [];
   }
@@ -460,8 +450,7 @@ export const logActivity = async (action: string, userEmail: string = 'dhameliya
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase logActivity error, falling back to mock:', error);
-      mockDb.logActivity(action, userEmail);
+      throw new Error(`Database error: ${error.message}`);
     }
     return;
   }
@@ -479,9 +468,7 @@ export const getUserProfileByPhone = async (phone: string): Promise<User | null>
       
     if (error) {
       handleDbError(error);
-      console.error('Supabase getUserProfileByPhone error, falling back to mock:', error);
-      const mockUsers = mockDb.getUsers();
-      return mockUsers.find(u => u.phone === phone) || null;
+      throw new Error(`Database error: ${error.message}`);
     }
     return data;
   }
@@ -501,8 +488,7 @@ export const createUserProfile = async (
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase createUserProfile error, falling back to mock:', error);
-      return mockDb.createUser(profile.email, profile.phone, profile.role, profile.id);
+      throw new Error(`Database error: ${error.message}`);
     }
     return data;
   }
@@ -519,9 +505,7 @@ export const getPartners = async (): Promise<User[]> => {
 
     if (error) {
       handleDbError(error);
-      console.error('Supabase getPartners error, falling back to mock:', error);
-      const mockUsers = mockDb.getUsers();
-      return mockUsers.filter(u => u.role === 'partner');
+      throw new Error(`Database error: ${error.message}`);
     }
     return data || [];
   }
