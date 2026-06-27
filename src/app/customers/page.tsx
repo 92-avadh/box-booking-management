@@ -331,7 +331,8 @@ export default function CustomersPage() {
                 </div>
               </div>
             )}
-          </div>}
+          </div>
+        )}
 
         {/* Add Customer Modal Drawer */}
         {showAddModal && (
