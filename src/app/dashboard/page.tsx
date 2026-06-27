@@ -223,7 +223,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Dynamic Metric Tiles */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
           {/* Card 1 - Today's Slots */}
           <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Today's Slots</span>
@@ -268,7 +268,27 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Card 5 - Pending Dues */}
+          {/* Card 5 - Net Profit */}
+          {(() => {
+            const netProfit = stats.monthlyRevenue - stats.monthlyExpenses;
+            const isProfit = netProfit >= 0;
+            return (
+              <div className={`bg-card border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${isProfit ? 'border-emerald-200/80' : 'border-red-200/80'}`}>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border w-fit block ${isProfit ? 'text-emerald-800 bg-emerald-50 border-emerald-100' : 'text-red-800 bg-red-50 border-red-100'}`}>
+                  {isProfit ? 'Net Profit' : 'Net Loss'}
+                </span>
+                <div className="flex items-baseline gap-0.5 mt-3 text-left">
+                  <IndianRupee className={`h-5 w-5 shrink-0 ${isProfit ? 'text-emerald-600' : 'text-red-600'}`} />
+                  <span className={`text-2xl font-extrabold leading-tight ${isProfit ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {Math.abs(netProfit).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <p className="text-[9px] text-muted-foreground/60 mt-1.5 font-medium">Revenue − Expenses</p>
+              </div>
+            );
+          })()}
+
+          {/* Card 6 - Pending Dues */}
           <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100 w-fit block">Pending Dues</span>
             <div className="flex items-baseline gap-0.5 mt-3 text-left">
