@@ -517,6 +517,24 @@ function BookingsContent() {
     }
   };
 
+  const handleNameChange = (val: string) => {
+    setFormCustName(val);
+    const nameVal = val.trim().toLowerCase();
+    if (nameVal) {
+      const existing = customers.find(c => c.name.toLowerCase() === nameVal);
+      if (existing) {
+        setFormCustomerId(existing.id);
+        setFormCustPhone(existing.phone);
+        setFormCustName(existing.name);
+        setFormError(null);
+      } else {
+        setFormCustomerId('');
+      }
+    } else {
+      setFormCustomerId('');
+    }
+  };
+
   // Load everything
   const loadAllData = async (silent = false) => {
     if (!silent) {
@@ -1923,7 +1941,7 @@ function BookingsContent() {
                   <div className="space-y-5">
                     <div>
                       <h4 className="font-bold text-sm text-foreground">Customer Profile Details</h4>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Enter the customer's phone number to verify if they have an existing profile, or create a new one.</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Enter the customer's name to verify if they have an existing profile, or create a new one.</p>
                     </div>
 
                     <div className="space-y-4">
@@ -1940,7 +1958,19 @@ function BookingsContent() {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                          {/* Mobile Phone Input - First */}
+                          {/* Customer Name Input - First */}
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Customer Name</label>
+                            <input
+                              type="text"
+                              placeholder="Sachin Tendulkar"
+                              value={formCustName}
+                              onChange={(e) => handleNameChange(e.target.value)}
+                              className="w-full px-3.5 py-2.5 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+
+                          {/* Mobile Phone Input - Second */}
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Mobile Phone</label>
                             <input
@@ -1950,18 +1980,6 @@ function BookingsContent() {
                               value={formCustPhone}
                               onChange={(e) => handlePhoneChange(e.target.value)}
                               className="w-full px-3.5 py-2.5 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-semibold font-mono focus:outline-none focus:ring-2 focus:ring-primary/20"
-                            />
-                          </div>
-
-                          {/* Customer Name Input - Second */}
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Customer Name</label>
-                            <input
-                              type="text"
-                              placeholder="Sachin Tendulkar"
-                              value={formCustName}
-                              onChange={(e) => setFormCustName(e.target.value)}
-                              className="w-full px-3.5 py-2.5 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-semibold focus:outline-none"
                             />
                           </div>
                         </div>
