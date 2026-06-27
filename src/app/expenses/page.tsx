@@ -40,6 +40,14 @@ export default function ExpensesPage() {
   // Search
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Pagination State
+  const [expensesPage, setExpensesPage] = useState(1);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setExpensesPage(1);
+  }, [searchTerm]);
+
   // Add/Edit Modal
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
@@ -152,6 +160,9 @@ export default function ExpensesPage() {
                         (e.id && e.id.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchSearch;
   });
+
+  const ENTRIES_PER_PAGE = 12;
+  const paginatedExpenses = filteredExpenses.slice((expensesPage - 1) * ENTRIES_PER_PAGE, expensesPage * ENTRIES_PER_PAGE);
 
   // Calculate Metrics
   const totalExpenseSum = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
@@ -418,7 +429,7 @@ export default function ExpensesPage() {
 
               {/* Mobile Card Grid View */}
               <div className="block sm:hidden divide-y divide-border/60">
-                {filteredExpenses.map((exp) => {
+                {paginatedExpenses.map((exp) => {
                   const matchingUser = usersList.find(u => u.phone === exp.user_phone);
                   const displayRole = matchingUser?.role ? ` (${matchingUser.role})` : '';
 
@@ -456,6 +467,54 @@ export default function ExpensesPage() {
                   );
                 })}
               </div>
+
+              {/* Pagination Controls */}
+              {Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE) > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                  <span className="text-muted-foreground text-center sm:text-left">
+                    Showing <strong className="text-foreground">{(expensesPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(expensesPage * ENTRIES_PER_PAGE, filteredExpenses.length)}</strong> of <strong className="text-foreground">{filteredExpenses.length}</strong> entries
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setExpensesPage(prev => Math.max(prev - 1, 1))}
+                      disabled={expensesPage === 1}
+                      className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                      .filter(page => page === 1 || page === Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE) || Math.abs(page - expensesPage) <= 1)
+                      .map((page, idx, arr) => {
+                        const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                        return (
+                          <React.Fragment key={page}>
+                            {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                            <button
+                              type="button"
+                              onClick={() => setExpensesPage(page)}
+                              className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                expensesPage === page
+                                  ? 'bg-primary text-white border-primary shadow-sm'
+                                  : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
+                    <button
+                      type="button"
+                      onClick={() => setExpensesPage(prev => Math.min(prev + 1, Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE)))}
+                      disabled={expensesPage === Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE)}
+                      className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

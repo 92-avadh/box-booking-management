@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     final_amount DECIMAL(10, 2) NOT NULL,
     status VARCHAR(50) DEFAULT 'Confirmed' CHECK (status IN ('Confirmed', 'Completed', 'Cancelled')) NOT NULL,
     notes TEXT,
+    reference_name VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     deleted_at TIMESTAMP WITH TIME ZONE -- Soft delete support
 );

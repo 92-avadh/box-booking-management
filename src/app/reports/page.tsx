@@ -61,6 +61,22 @@ export default function ReportsPage() {
   const [selectedReportTab, setSelectedReportTab] = useState<'bookings' | 'revenue' | 'payments' | 'discounts'>('bookings');
   const [methodFilter, setMethodFilter] = useState<string>('all');
 
+  // Pagination states
+  const [bookingsPage, setBookingsPage] = useState(1);
+  const [revenueBookingsPage, setRevenueBookingsPage] = useState(1);
+  const [revenueExpensesPage, setRevenueExpensesPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [discountsPage, setDiscountsPage] = useState(1);
+
+  // Reset all page states on filter change
+  useEffect(() => {
+    setBookingsPage(1);
+    setRevenueBookingsPage(1);
+    setRevenueExpensesPage(1);
+    setPaymentsPage(1);
+    setDiscountsPage(1);
+  }, [startDate, endDate, selectedReportTab, methodFilter]);
+
   useEffect(() => {
     setMethodFilter('all');
   }, [selectedReportTab]);
@@ -180,6 +196,13 @@ export default function ReportsPage() {
   const totalCash = overallCollectedPayments
     .filter(p => p.payment_method === 'Cash')
     .reduce((sum, p) => sum + Number(p.amount_paid), 0);
+
+  const ENTRIES_PER_PAGE = 12;
+  const paginatedBookings = filteredBookings.slice((bookingsPage - 1) * ENTRIES_PER_PAGE, bookingsPage * ENTRIES_PER_PAGE);
+  const paginatedRevenueBookings = filteredBookings.slice((revenueBookingsPage - 1) * ENTRIES_PER_PAGE, revenueBookingsPage * ENTRIES_PER_PAGE);
+  const paginatedRevenueExpenses = filteredExpenses.slice((revenueExpensesPage - 1) * ENTRIES_PER_PAGE, revenueExpensesPage * ENTRIES_PER_PAGE);
+  const paginatedPayments = filteredPayments.slice((paymentsPage - 1) * ENTRIES_PER_PAGE, paymentsPage * ENTRIES_PER_PAGE);
+  const paginatedDiscounts = filteredDiscounts.slice((discountsPage - 1) * ENTRIES_PER_PAGE, discountsPage * ENTRIES_PER_PAGE);
 
   return (
     <DashboardLayout>
@@ -340,7 +363,7 @@ export default function ReportsPage() {
                       {filteredBookings.length === 0 ? (
                         <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">No bookings recorded in this range</td></tr>
                       ) : (
-                        filteredBookings.map(b => (
+                        paginatedBookings.map(b => (
                           <tr key={b.id} className="hover:bg-muted/15 transition-colors">
                             <td className="py-3 px-5 font-mono text-[10px]">{b.id}</td>
                             <td className="py-3 px-5">{b.customer?.name}</td>
@@ -359,7 +382,7 @@ export default function ReportsPage() {
                     {filteredBookings.length === 0 ? (
                       <p className="text-center py-10 text-xs text-muted-foreground">No bookings recorded in this range</p>
                     ) : (
-                      filteredBookings.map(b => (
+                      paginatedBookings.map(b => (
                         <div key={b.id} className="p-4 space-y-2 text-left">
                           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                             <span className="font-mono">{b.id}</span>
@@ -379,6 +402,54 @@ export default function ReportsPage() {
                       ))
                     )}
                   </div>
+
+                  {/* Pagination Controls */}
+                  {Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                      <span className="text-muted-foreground text-center sm:text-left">
+                        Showing <strong className="text-foreground">{(bookingsPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(bookingsPage * ENTRIES_PER_PAGE, filteredBookings.length)}</strong> of <strong className="text-foreground">{filteredBookings.length}</strong> entries
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setBookingsPage(prev => Math.max(prev - 1, 1))}
+                          disabled={bookingsPage === 1}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Previous
+                        </button>
+                        {Array.from({ length: Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                          .filter(page => page === 1 || page === Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) || Math.abs(page - bookingsPage) <= 1)
+                          .map((page, idx, arr) => {
+                            const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                            return (
+                              <React.Fragment key={page}>
+                                {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                                <button
+                                  type="button"
+                                  onClick={() => setBookingsPage(page)}
+                                  className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                    bookingsPage === page
+                                      ? 'bg-primary text-white border-primary shadow-sm'
+                                      : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </React.Fragment>
+                            );
+                          })}
+                        <button
+                          type="button"
+                          onClick={() => setBookingsPage(prev => Math.min(prev + 1, Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE)))}
+                          disabled={bookingsPage === Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE)}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -402,7 +473,7 @@ export default function ReportsPage() {
                       {filteredBookings.length === 0 ? (
                         <tr><td colSpan={7} className="text-center py-10 text-muted-foreground">No revenues logged in this range</td></tr>
                       ) : (
-                        filteredBookings.map(b => {
+                        paginatedRevenueBookings.map(b => {
                           const pay = paymentSummaries[b.id];
                           let statClass = 'bg-red-50 text-red-805 border-red-200';
                           if (pay?.status === 'Paid') statClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
@@ -435,7 +506,7 @@ export default function ReportsPage() {
                     {filteredBookings.length === 0 ? (
                       <p className="text-center py-10 text-xs text-muted-foreground">No revenues logged in this range</p>
                     ) : (
-                      filteredBookings.map(b => {
+                      paginatedRevenueBookings.map(b => {
                         const pay = paymentSummaries[b.id];
                         let statClass = 'bg-red-50 text-red-808 border-red-200';
                         if (pay?.status === 'Paid') statClass = 'bg-emerald-50 text-emerald-800 border-emerald-200';
@@ -475,6 +546,54 @@ export default function ReportsPage() {
                     )}
                   </div>
 
+                  {/* Pagination Controls */}
+                  {Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                      <span className="text-muted-foreground text-center sm:text-left">
+                        Showing <strong className="text-foreground">{(revenueBookingsPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(revenueBookingsPage * ENTRIES_PER_PAGE, filteredBookings.length)}</strong> of <strong className="text-foreground">{filteredBookings.length}</strong> entries
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setRevenueBookingsPage(prev => Math.max(prev - 1, 1))}
+                          disabled={revenueBookingsPage === 1}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Previous
+                        </button>
+                        {Array.from({ length: Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                          .filter(page => page === 1 || page === Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) || Math.abs(page - revenueBookingsPage) <= 1)
+                          .map((page, idx, arr) => {
+                            const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                            return (
+                              <React.Fragment key={page}>
+                                {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                                <button
+                                  type="button"
+                                  onClick={() => setRevenueBookingsPage(page)}
+                                  className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                    revenueBookingsPage === page
+                                      ? 'bg-primary text-white border-primary shadow-sm'
+                                      : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </React.Fragment>
+                            );
+                          })}
+                        <button
+                          type="button"
+                          onClick={() => setRevenueBookingsPage(prev => Math.min(prev + 1, Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE)))}
+                          disabled={revenueBookingsPage === Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE)}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Expenses Breakdown Section (Deducted from revenue) */}
                   <div className="mt-8 border-t border-border pt-6 px-5">
                     <h3 className="text-xs font-bold text-foreground mb-3 flex items-center gap-2">
@@ -498,7 +617,7 @@ export default function ReportsPage() {
                       {filteredExpenses.length === 0 ? (
                         <tr><td colSpan={5} className="text-center py-10 text-muted-foreground">No expenses recorded in this range</td></tr>
                       ) : (
-                        filteredExpenses.map(e => (
+                        paginatedRevenueExpenses.map(e => (
                           <tr key={e.id} className="hover:bg-muted/15 transition-colors">
                             <td className="py-3 px-5 font-mono text-[10px]">{e.id.substring(0, 8)}...</td>
                             <td className="py-3 px-5 font-bold">{e.user_phone}</td>
@@ -516,7 +635,7 @@ export default function ReportsPage() {
                     {filteredExpenses.length === 0 ? (
                       <p className="text-center py-10 text-xs text-muted-foreground">No expenses recorded in this range</p>
                     ) : (
-                      filteredExpenses.map(e => (
+                      paginatedRevenueExpenses.map(e => (
                         <div key={e.id} className="p-4 space-y-1.5 text-left">
                           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                             <span className="font-mono">{e.id.substring(0, 8)}...</span>
@@ -533,6 +652,54 @@ export default function ReportsPage() {
                       ))
                     )}
                   </div>
+
+                  {/* Pagination Controls */}
+                  {Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE) > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                      <span className="text-muted-foreground text-center sm:text-left">
+                        Showing <strong className="text-foreground">{(revenueExpensesPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(revenueExpensesPage * ENTRIES_PER_PAGE, filteredExpenses.length)}</strong> of <strong className="text-foreground">{filteredExpenses.length}</strong> entries
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setRevenueExpensesPage(prev => Math.max(prev - 1, 1))}
+                          disabled={revenueExpensesPage === 1}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Previous
+                        </button>
+                        {Array.from({ length: Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                          .filter(page => page === 1 || page === Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE) || Math.abs(page - revenueExpensesPage) <= 1)
+                          .map((page, idx, arr) => {
+                            const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                            return (
+                              <React.Fragment key={page}>
+                                {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                                <button
+                                  type="button"
+                                  onClick={() => setRevenueExpensesPage(page)}
+                                  className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                    revenueExpensesPage === page
+                                      ? 'bg-primary text-white border-primary shadow-sm'
+                                      : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </React.Fragment>
+                            );
+                          })}
+                        <button
+                          type="button"
+                          onClick={() => setRevenueExpensesPage(prev => Math.min(prev + 1, Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE)))}
+                          disabled={revenueExpensesPage === Math.ceil(filteredExpenses.length / ENTRIES_PER_PAGE)}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Profitability / Net Revenue Summary Footer */}
                   <div className="bg-muted/10 p-5 border-t border-border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs font-semibold">
@@ -567,7 +734,7 @@ export default function ReportsPage() {
                       {filteredPayments.length === 0 ? (
                         <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">No payment receipts in this range</td></tr>
                       ) : (
-                        filteredPayments.map(p => {
+                        paginatedPayments.map(p => {
                           const parentBooking = bookings.find(book => book.id === p.booking_id);
                           return (
                             <tr key={p.id} className="hover:bg-muted/15 transition-colors">
@@ -593,7 +760,7 @@ export default function ReportsPage() {
                     {filteredPayments.length === 0 ? (
                       <p className="text-center py-10 text-xs text-muted-foreground">No payment receipts in this range</p>
                     ) : (
-                      filteredPayments.map(p => {
+                      paginatedPayments.map(p => {
                         const parentBooking = bookings.find(book => book.id === p.booking_id);
                         return (
                           <div key={p.id} className="p-4 space-y-2 text-left">
@@ -608,7 +775,7 @@ export default function ReportsPage() {
                                 <span className="font-bold text-foreground text-sm block">{parentBooking?.customer?.name || 'Walk-in'}</span>
                                 <span className="text-xs text-muted-foreground block">Collected: {new Date(p.payment_date).toLocaleDateString()}</span>
                               </div>
-                              <span className="font-bold text-emerald-700 text-sm">₹{p.amount_paid}</span>
+                              <span className="font-bold text-emerald-705 text-sm">₹{p.amount_paid}</span>
                             </div>
                             <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/40 font-mono">
                               Booking Ref: {p.booking_id}
@@ -618,6 +785,54 @@ export default function ReportsPage() {
                       })
                     )}
                   </div>
+
+                  {/* Pagination Controls */}
+                  {Math.ceil(filteredPayments.length / ENTRIES_PER_PAGE) > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                      <span className="text-muted-foreground text-center sm:text-left">
+                        Showing <strong className="text-foreground">{(paymentsPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(paymentsPage * ENTRIES_PER_PAGE, filteredPayments.length)}</strong> of <strong className="text-foreground">{filteredPayments.length}</strong> entries
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentsPage(prev => Math.max(prev - 1, 1))}
+                          disabled={paymentsPage === 1}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Previous
+                        </button>
+                        {Array.from({ length: Math.ceil(filteredPayments.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                          .filter(page => page === 1 || page === Math.ceil(filteredPayments.length / ENTRIES_PER_PAGE) || Math.abs(page - paymentsPage) <= 1)
+                          .map((page, idx, arr) => {
+                            const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                            return (
+                              <React.Fragment key={page}>
+                                {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                                <button
+                                  type="button"
+                                  onClick={() => setPaymentsPage(page)}
+                                  className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                    paymentsPage === page
+                                      ? 'bg-primary text-white border-primary shadow-sm'
+                                      : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </React.Fragment>
+                            );
+                          })}
+                        <button
+                          type="button"
+                          onClick={() => setPaymentsPage(prev => Math.min(prev + 1, Math.ceil(filteredPayments.length / ENTRIES_PER_PAGE)))}
+                          disabled={paymentsPage === Math.ceil(filteredPayments.length / ENTRIES_PER_PAGE)}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -640,7 +855,7 @@ export default function ReportsPage() {
                       {filteredDiscounts.length === 0 ? (
                         <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">No discounts registered in this range</td></tr>
                       ) : (
-                        filteredDiscounts.map(b => (
+                        paginatedDiscounts.map(b => (
                           <tr key={b.id} className="hover:bg-muted/15 transition-colors">
                             <td className="py-3 px-5 font-mono text-[10px]">{b.id}</td>
                             <td className="py-3 px-5">{b.customer?.name}</td>
@@ -659,7 +874,7 @@ export default function ReportsPage() {
                     {filteredDiscounts.length === 0 ? (
                       <p className="text-center py-10 text-xs text-muted-foreground">No discounts registered in this range</p>
                     ) : (
-                      filteredDiscounts.map(b => (
+                      paginatedDiscounts.map(b => (
                         <div key={b.id} className="p-4 space-y-2 text-left">
                           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                             <span className="font-mono">{b.id}</span>
@@ -687,6 +902,54 @@ export default function ReportsPage() {
                       ))
                     )}
                   </div>
+
+                  {/* Pagination Controls */}
+                  {Math.ceil(filteredDiscounts.length / ENTRIES_PER_PAGE) > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                      <span className="text-muted-foreground text-center sm:text-left">
+                        Showing <strong className="text-foreground">{(discountsPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(discountsPage * ENTRIES_PER_PAGE, filteredDiscounts.length)}</strong> of <strong className="text-foreground">{filteredDiscounts.length}</strong> entries
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setDiscountsPage(prev => Math.max(prev - 1, 1))}
+                          disabled={discountsPage === 1}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Previous
+                        </button>
+                        {Array.from({ length: Math.ceil(filteredDiscounts.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                          .filter(page => page === 1 || page === Math.ceil(filteredDiscounts.length / ENTRIES_PER_PAGE) || Math.abs(page - discountsPage) <= 1)
+                          .map((page, idx, arr) => {
+                            const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                            return (
+                              <React.Fragment key={page}>
+                                {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                                <button
+                                  type="button"
+                                  onClick={() => setDiscountsPage(page)}
+                                  className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                    discountsPage === page
+                                      ? 'bg-primary text-white border-primary shadow-sm'
+                                      : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              </React.Fragment>
+                            );
+                          })}
+                        <button
+                          type="button"
+                          onClick={() => setDiscountsPage(prev => Math.min(prev + 1, Math.ceil(filteredDiscounts.length / ENTRIES_PER_PAGE)))}
+                          disabled={discountsPage === Math.ceil(filteredDiscounts.length / ENTRIES_PER_PAGE)}
+                          className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

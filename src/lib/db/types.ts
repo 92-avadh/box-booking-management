@@ -39,6 +39,7 @@ export interface Booking {
   final_amount: number; // amount - discount + additional_amount
   status: BookingStatus;
   notes?: string;
+  reference_name?: string | null;
   created_at: string;
   deleted_at?: string | null; // Soft delete
   

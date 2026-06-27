@@ -30,7 +30,9 @@ import {
   FileSpreadsheet,
   Receipt,
   ChevronDown,
-  Download
+  Download,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -53,6 +55,28 @@ export default function PaymentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [methodFilter, setMethodFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'balances' | 'receipts'>('balances');
+
+  // Pagination states
+  const [balancesPage, setBalancesPage] = useState(1);
+  const [receiptsPage, setReceiptsPage] = useState(1);
+
+  // Reset pages when filters change
+  useEffect(() => {
+    setBalancesPage(1);
+  }, [searchTerm, statusFilter, dateFilterType, selectedFilterDate]);
+
+  useEffect(() => {
+    setReceiptsPage(1);
+  }, [searchTerm, methodFilter, dateFilterType, selectedFilterDate]);
+
+  // Date Filtering states
+  const [dateFilterType, setDateFilterType] = useState<'today' | 'yesterday' | 'week' | 'month' | 'all'>('today');
+  const [selectedFilterDate, setSelectedFilterDate] = useState<string>('');
+
+  // Initialize selectedFilterDate on mount
+  useEffect(() => {
+    setSelectedFilterDate(getLocalFormattedDate(new Date()));
+  }, []);
 
   // Log Payment Form
   const [showLogModal, setShowLogModal] = useState(false);
@@ -94,6 +118,115 @@ export default function PaymentsPage() {
     if (logPaymentMode === 'Split') {
       setLogUpiSplit(Math.round(total / 2).toString());
       setLogCashSplit((total - Math.round(total / 2)).toString());
+    }
+  };
+
+  const getLocalFormattedDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const getLocalFormattedDateFromTimestamp = (timestampStr: string) => {
+    if (!timestampStr) return '';
+    return getLocalFormattedDate(new Date(timestampStr));
+  };
+
+  const parseLocalDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  const isDateWithinFilter = (dateStr: string) => {
+    if (!dateStr || !selectedFilterDate) return false;
+    if (dateFilterType === 'all') return true;
+
+    const checkDate = parseLocalDate(dateStr);
+    const refDate = parseLocalDate(selectedFilterDate);
+
+    if (dateFilterType === 'today') {
+      return dateStr === selectedFilterDate;
+    }
+
+    if (dateFilterType === 'yesterday') {
+      const yesterday = new Date(refDate);
+      yesterday.setDate(refDate.getDate() - 1);
+      const yesterdayStr = getLocalFormattedDate(yesterday);
+      return dateStr === yesterdayStr;
+    }
+
+    if (dateFilterType === 'week') {
+      const day = refDate.getDay();
+      const diff = refDate.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(refDate);
+      monday.setDate(diff);
+      monday.setHours(0,0,0,0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23,59,59,999);
+
+      return checkDate >= monday && checkDate <= sunday;
+    }
+
+    if (dateFilterType === 'month') {
+      return checkDate.getFullYear() === refDate.getFullYear() && checkDate.getMonth() === refDate.getMonth();
+    }
+
+    return false;
+  };
+
+  const handlePrevPaymentsPeriod = () => {
+    if (!selectedFilterDate) return;
+    const current = parseLocalDate(selectedFilterDate);
+    if (dateFilterType === 'today' || dateFilterType === 'yesterday') {
+      current.setDate(current.getDate() - 1);
+    } else if (dateFilterType === 'week') {
+      current.setDate(current.getDate() - 7);
+    } else if (dateFilterType === 'month') {
+      current.setMonth(current.getMonth() - 1);
+    }
+    setSelectedFilterDate(getLocalFormattedDate(current));
+  };
+
+  const handleNextPaymentsPeriod = () => {
+    if (!selectedFilterDate) return;
+    const current = parseLocalDate(selectedFilterDate);
+    if (dateFilterType === 'today' || dateFilterType === 'yesterday') {
+      current.setDate(current.getDate() + 1);
+    } else if (dateFilterType === 'week') {
+      current.setDate(current.getDate() + 7);
+    } else if (dateFilterType === 'month') {
+      current.setMonth(current.getMonth() + 1);
+    }
+    setSelectedFilterDate(getLocalFormattedDate(current));
+  };
+
+  const handleResetPaymentsToday = () => {
+    setSelectedFilterDate(getLocalFormattedDate(new Date()));
+  };
+
+  const getPaymentsFilterTitle = () => {
+    if (dateFilterType === 'all') return 'All Time';
+    if (!selectedFilterDate) return '';
+    const dateObj = parseLocalDate(selectedFilterDate);
+    if (dateFilterType === 'today') {
+      return dateObj.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    } else if (dateFilterType === 'yesterday') {
+      const yesterday = new Date(dateObj);
+      yesterday.setDate(dateObj.getDate() - 1);
+      return `Yesterday (${yesterday.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })})`;
+    } else if (dateFilterType === 'week') {
+      const day = dateObj.getDay();
+      const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(dateObj);
+      monday.setDate(diff);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return `Week of ${monday.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    } else {
+      return dateObj.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     }
   };
 
@@ -173,31 +306,35 @@ export default function PaymentsPage() {
     };
   }, []);
 
-  // Totals calculations based on active (non-cancelled) bookings
+  // Totals calculations based on active (non-cancelled) bookings and selected date filter
   const activeBookings = bookings.filter(b => b.status !== 'Cancelled');
+
+  // Filter bookings and payments for metrics according to the selected date filter
+  const periodBookings = activeBookings.filter(b => isDateWithinFilter(b.booking_date));
   
-  const totalOutstanding = activeBookings.reduce((sum, b) => {
+  const periodPayments = payments.filter(p => {
+    const bookingExists = bookings.some(b => b.id === p.booking_id);
+    return bookingExists && isDateWithinFilter(getLocalFormattedDateFromTimestamp(p.payment_date));
+  });
+  
+  const totalOutstanding = periodBookings.reduce((sum, b) => {
     const summary = paymentSummaries[b.id];
     return sum + (summary ? summary.pendingAmount : 0);
   }, 0);
 
-  const totalCollected = payments.reduce((sum, p) => {
-    // Only sum payments for bookings that are not soft-deleted
-    const bookingExists = bookings.some(b => b.id === p.booking_id);
-    return sum + (bookingExists ? Number(p.amount_paid) : 0);
+  const totalCollected = periodPayments.reduce((sum, p) => {
+    return sum + Number(p.amount_paid);
   }, 0);
 
-  const totalUPI = payments.reduce((sum, p) => {
-    const bookingExists = bookings.some(b => b.id === p.booking_id);
-    return sum + (bookingExists && p.payment_method === 'UPI' ? Number(p.amount_paid) : 0);
+  const totalUPI = periodPayments.filter(p => p.payment_method === 'UPI').reduce((sum, p) => {
+    return sum + Number(p.amount_paid);
   }, 0);
 
-  const totalCash = payments.reduce((sum, p) => {
-    const bookingExists = bookings.some(b => b.id === p.booking_id);
-    return sum + (bookingExists && p.payment_method === 'Cash' ? Number(p.amount_paid) : 0);
+  const totalCash = periodPayments.filter(p => p.payment_method === 'Cash').reduce((sum, p) => {
+    return sum + Number(p.amount_paid);
   }, 0);
 
-  const totalDiscounts = activeBookings.reduce((sum, b) => sum + Number(b.discount), 0);
+  const totalDiscounts = periodBookings.reduce((sum, b) => sum + Number(b.discount), 0);
 
   // Filtered Bookings (Balances tab)
   const filteredBookings = activeBookings.filter(b => {
@@ -207,7 +344,8 @@ export default function PaymentsPage() {
                         b.id.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchStatus = statusFilter === 'all' || (summary && summary.status === statusFilter);
-    return matchSearch && matchStatus;
+    const matchDate = isDateWithinFilter(b.booking_date);
+    return matchSearch && matchStatus && matchDate;
   });
 
   // Filtered Receipts (Receipts tab)
@@ -219,8 +357,14 @@ export default function PaymentsPage() {
                         p.id.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchMethod = methodFilter === 'all' || p.payment_method === methodFilter;
-    return matchSearch && matchMethod;
+    const matchDate = isDateWithinFilter(getLocalFormattedDateFromTimestamp(p.payment_date));
+    return matchSearch && matchMethod && matchDate;
   });
+
+  // Pagination slices
+  const ENTRIES_PER_PAGE = 12;
+  const paginatedBookings = filteredBookings.slice((balancesPage - 1) * ENTRIES_PER_PAGE, balancesPage * ENTRIES_PER_PAGE);
+  const paginatedReceipts = filteredReceipts.slice((receiptsPage - 1) * ENTRIES_PER_PAGE, receiptsPage * ENTRIES_PER_PAGE);
 
   // Log Payment submit
   const handleLogPayment = async (e: React.FormEvent) => {
@@ -314,7 +458,70 @@ export default function PaymentsPage() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Payments Ledger</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Audit customer deposits, collect pending balances, and trace receipts</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Audit customer deposits, collect pending balances, and trace receipts for <span className="font-extrabold text-primary">{getPaymentsFilterTitle()}</span>
+          </p>
+        </div>
+
+        {/* Date Filter Toolbar */}
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handlePrevPaymentsPeriod}
+              disabled={dateFilterType === 'all'}
+              className="p-2 hover:bg-muted border border-border rounded-xl text-muted-foreground hover:text-foreground cursor-pointer shadow-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={handleNextPaymentsPeriod}
+              disabled={dateFilterType === 'all'}
+              className="p-2 hover:bg-muted border border-border rounded-xl text-muted-foreground hover:text-foreground cursor-pointer shadow-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={handleResetPaymentsToday}
+              disabled={dateFilterType === 'all'}
+              className="px-3.5 py-2 hover:bg-muted border border-border rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer shadow-sm active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Today
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 justify-end">
+            {/* Period selector */}
+            <div className="bg-muted/40 border border-border/80 rounded-xl p-1 flex shadow-sm">
+              {(['today', 'yesterday', 'week', 'month', 'all'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => setDateFilterType(type)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
+                    dateFilterType === type
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {type === 'today' ? 'Day' : type === 'yesterday' ? 'Yesterday' : type === 'week' ? 'Week' : type === 'month' ? 'Month' : 'All Time'}
+                </button>
+              ))}
+            </div>
+
+            {/* Date Picker Input */}
+            {dateFilterType !== 'all' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase hidden sm:inline-block">Date:</span>
+                <input
+                  type="date"
+                  value={selectedFilterDate}
+                  onChange={(e) => {
+                    if (e.target.value) setSelectedFilterDate(e.target.value);
+                  }}
+                  className="px-3 py-1.5 bg-card border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer shadow-sm"
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Financial Stat Cards */}
@@ -476,7 +683,7 @@ export default function PaymentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60 text-xs text-foreground font-medium">
-                    {filteredBookings.map((b) => {
+                    {paginatedBookings.map((b) => {
                       const summary = paymentSummaries[b.id];
                       
                       let badgeStyle = 'bg-red-50 text-red-808 border-red-200';
@@ -530,7 +737,7 @@ export default function PaymentsPage() {
                             <button
                               type="button"
                               onClick={async () => {
-                                await exportBookingReceiptPDF(b, summary || { totalPaid: 0, pendingAmount: b.final_amount, status: 'Pending' });
+                                  await exportBookingReceiptPDF(b, summary || { totalPaid: 0, pendingAmount: b.final_amount, status: 'Pending' });
                               }}
                               className="p-1.5 border border-border bg-card hover:bg-muted text-foreground/80 font-bold rounded-lg text-[10px] transition-all cursor-pointer inline-flex items-center justify-center"
                               title="Download Receipt"
@@ -546,7 +753,7 @@ export default function PaymentsPage() {
 
                 {/* Mobile View Card List */}
                 <div className="block sm:hidden divide-y divide-border/60">
-                  {filteredBookings.map((b) => {
+                  {paginatedBookings.map((b) => {
                     const summary = paymentSummaries[b.id];
                     let badgeStyle = 'bg-red-50 text-red-808 border-red-200';
                     if (summary?.status === 'Paid') badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
@@ -622,6 +829,54 @@ export default function PaymentsPage() {
                     );
                   })}
                 </div>
+                
+                {/* Pagination Controls */}
+                {Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                    <span className="text-muted-foreground text-center sm:text-left">
+                      Showing <strong className="text-foreground">{(balancesPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(balancesPage * ENTRIES_PER_PAGE, filteredBookings.length)}</strong> of <strong className="text-foreground">{filteredBookings.length}</strong> entries
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setBalancesPage(prev => Math.max(prev - 1, 1))}
+                        disabled={balancesPage === 1}
+                        className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                        .filter(page => page === 1 || page === Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE) || Math.abs(page - balancesPage) <= 1)
+                        .map((page, idx, arr) => {
+                          const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                          return (
+                            <React.Fragment key={page}>
+                              {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                              <button
+                                type="button"
+                                onClick={() => setBalancesPage(page)}
+                                className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                  balancesPage === page
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </React.Fragment>
+                          );
+                        })}
+                      <button
+                        type="button"
+                        onClick={() => setBalancesPage(prev => Math.min(prev + 1, Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE)))}
+                        disabled={balancesPage === Math.ceil(filteredBookings.length / ENTRIES_PER_PAGE)}
+                        className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -662,7 +917,7 @@ export default function PaymentsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60 text-xs text-foreground font-medium">
-                    {filteredReceipts.map((p) => {
+                    {paginatedReceipts.map((p) => {
                       const b = bookings.find(book => book.id === p.booking_id);
                       
                       let methodStyle = 'bg-muted text-muted-foreground border-border';
@@ -709,7 +964,7 @@ export default function PaymentsPage() {
 
                 {/* Mobile View Card List */}
                 <div className="block sm:hidden divide-y divide-border/60">
-                  {filteredReceipts.map((p) => {
+                  {paginatedReceipts.map((p) => {
                     const b = bookings.find(book => book.id === p.booking_id);
                     let methodStyle = 'bg-muted text-muted-foreground border-border';
                     if (p.payment_method === 'UPI') methodStyle = 'bg-blue-50 text-blue-800 border-blue-200';
@@ -756,6 +1011,54 @@ export default function PaymentsPage() {
                     );
                   })}
                 </div>
+
+                {/* Pagination Controls */}
+                {Math.ceil(filteredReceipts.length / ENTRIES_PER_PAGE) > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-border bg-muted/10 text-xs font-semibold gap-3">
+                    <span className="text-muted-foreground text-center sm:text-left">
+                      Showing <strong className="text-foreground">{(receiptsPage - 1) * ENTRIES_PER_PAGE + 1}</strong> to <strong className="text-foreground">{Math.min(receiptsPage * ENTRIES_PER_PAGE, filteredReceipts.length)}</strong> of <strong className="text-foreground">{filteredReceipts.length}</strong> entries
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setReceiptsPage(prev => Math.max(prev - 1, 1))}
+                        disabled={receiptsPage === 1}
+                        className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                      >
+                        Previous
+                      </button>
+                      {Array.from({ length: Math.ceil(filteredReceipts.length / ENTRIES_PER_PAGE) }, (_, i) => i + 1)
+                        .filter(page => page === 1 || page === Math.ceil(filteredReceipts.length / ENTRIES_PER_PAGE) || Math.abs(page - receiptsPage) <= 1)
+                        .map((page, idx, arr) => {
+                          const showEllipsis = idx > 0 && page - arr[idx - 1] > 1;
+                          return (
+                            <React.Fragment key={page}>
+                              {showEllipsis && <span className="px-2 text-muted-foreground">...</span>}
+                              <button
+                                type="button"
+                                onClick={() => setReceiptsPage(page)}
+                                className={`px-3 py-1.5 border rounded-lg transition-all select-none cursor-pointer ${
+                                  receiptsPage === page
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </React.Fragment>
+                          );
+                        })}
+                      <button
+                        type="button"
+                        onClick={() => setReceiptsPage(prev => Math.min(prev + 1, Math.ceil(filteredReceipts.length / ENTRIES_PER_PAGE)))}
+                        disabled={receiptsPage === Math.ceil(filteredReceipts.length / ENTRIES_PER_PAGE)}
+                        className="px-3 py-1.5 border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all select-none cursor-pointer"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

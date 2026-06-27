@@ -156,23 +156,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex bg-background font-sans">
       {/* SIDEBAR - DESKTOP */}
       <aside className={`hidden lg:flex flex-col bg-card border-r border-border/80 shrink-0 relative transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-[72px] p-3' : 'w-64 p-6'}`}>
-        {/* Brand Logo */}
-        <div className={`flex items-center mb-8 ${sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-2'}`}>
-          <img 
-            src="/logo.png" 
-            alt="360 Club Box Logo" 
-            className={`object-contain ${sidebarCollapsed ? 'h-8 max-w-[32px]' : 'h-9 max-w-[45px]'}`}
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
-          {!sidebarCollapsed && (
-            <div>
-              <h2 className="font-bold text-sm text-foreground tracking-tight leading-tight">360 Club Box</h2>
-              <p className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider leading-none mt-0.5">Management</p>
+        {/* Brand Logo & Sidebar Collapse Button */}
+        {sidebarCollapsed ? (
+          <div className="flex flex-col items-center gap-4 mb-8">
+            <img 
+              src="/logo.png" 
+              alt="360 Club Box Logo" 
+              className="h-8 max-w-[32px] object-contain"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 hover:bg-muted border border-border/80 rounded-xl text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Expand sidebar"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between mb-8 px-2">
+            <div className="flex items-center gap-3">
+              <img 
+                src="/logo.png" 
+                alt="360 Club Box Logo" 
+                className="h-9 max-w-[45px] object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+              <div>
+                <h2 className="font-bold text-sm text-foreground tracking-tight leading-tight">360 Club Box</h2>
+                <p className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider leading-none mt-0.5">Management</p>
+              </div>
             </div>
-          )}
-        </div>
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 hover:bg-muted border border-border/80 rounded-xl text-muted-foreground hover:text-foreground transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Collapse sidebar"
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {/* Navigation Menu */}
         <div className="flex-1 flex flex-col justify-between">
@@ -261,21 +288,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             )}
 
-            {/* Collapse / Expand Toggle */}
-            <button
-              onClick={toggleSidebar}
-              className={`w-full flex items-center gap-2 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-all cursor-pointer ${sidebarCollapsed ? 'justify-center px-2' : 'px-3'}`}
-              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {sidebarCollapsed ? (
-                <ChevronsRight className="h-4 w-4" />
-              ) : (
-                <>
-                  <ChevronsLeft className="h-4 w-4" />
-                  <span>Collapse</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
       </aside>

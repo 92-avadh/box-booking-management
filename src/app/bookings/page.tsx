@@ -108,6 +108,8 @@ function BookingsContent() {
   const [formDiscount, setFormDiscount] = useState<string>('0');
   const [formAdditionalAmount, setFormAdditionalAmount] = useState<string>('0');
   const [formNotes, setFormNotes] = useState('');
+  const [formHasReference, setFormHasReference] = useState(false);
+  const [formReferenceName, setFormReferenceName] = useState('');
   const [formInitialPayment, setFormInitialPayment] = useState<string>('0');
   const [formInitialPaymentMethod, setFormInitialPaymentMethod] = useState<PaymentMethod>('UPI');
   const [formError, setFormError] = useState<string | null>(null);
@@ -773,6 +775,7 @@ function BookingsContent() {
           final_amount: calculatedFinalAmount,
           status: editStatus,
           notes: sanitizedNotes,
+          reference_name: formHasReference ? formReferenceName.trim() : null,
           created_at: bookings.find(b => b.id === editBookingId)?.created_at || new Date().toISOString()
         };
 
@@ -821,7 +824,8 @@ function BookingsContent() {
             additional_amount: shareOfAdditional,
             final_amount: finalAmount,
             status: 'Confirmed' as BookingStatus,
-            notes: sanitizedNotes
+            notes: sanitizedNotes,
+            reference_name: formHasReference ? formReferenceName.trim() : null
           };
         });
 
@@ -955,6 +959,8 @@ function BookingsContent() {
     setFormDiscount('0');
     setFormAdditionalAmount('0');
     setFormNotes('');
+    setFormHasReference(false);
+    setFormReferenceName('');
     setPaymentMode('UPI');
     setPaymentAmount('');
     setUpiSplitAmount('0');
@@ -990,6 +996,8 @@ function BookingsContent() {
     setFormDiscount(booking.discount.toString());
     setFormAdditionalAmount((booking.additional_amount || 0).toString());
     setFormNotes(booking.notes || '');
+    setFormHasReference(!!booking.reference_name);
+    setFormReferenceName(booking.reference_name || '');
     setEditStatus(booking.status);
     
     setWizardStep(1); // Start customer registration, prefilling slot/date
@@ -1746,6 +1754,14 @@ function BookingsContent() {
                 </div>
               )}
 
+              {/* Reference */}
+              {selectedBooking.reference_name && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Reference By</span>
+                  <p className="text-xs text-muted-foreground bg-muted/40 p-3 rounded-xl border border-border/50 font-bold text-primary">{selectedBooking.reference_name}</p>
+                </div>
+              )}
+
               {/* Payment Summary */}
               <div className="border-t border-border/80 pt-4 space-y-3.5">
                 <h4 className="font-extrabold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -1982,6 +1998,36 @@ function BookingsContent() {
                               className="w-full px-3.5 py-2.5 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-semibold font-mono focus:outline-none focus:ring-2 focus:ring-primary/20"
                             />
                           </div>
+                        </div>
+
+                        {/* Reference Toggle / Input */}
+                        <div className="border-t border-border/60 pt-4 space-y-3">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={formHasReference}
+                              onChange={(e) => {
+                                setFormHasReference(e.target.checked);
+                                if (!e.target.checked) setFormReferenceName('');
+                              }}
+                              className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-foreground">Add Booking Reference / Referral?</span>
+                          </label>
+
+                          {formHasReference && (
+                            <div className="space-y-1.5 animate-fade-in max-w-sm text-left">
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Reference By (Name)</label>
+                              <input
+                                type="text"
+                                placeholder="E.g., Friend name, Partner name, etc."
+                                value={formReferenceName}
+                                onChange={(e) => setFormReferenceName(e.target.value)}
+                                className="w-full px-3.5 py-2.5 bg-card border border-border rounded-xl text-[16px] sm:text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                required={formHasReference}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2301,6 +2347,12 @@ function BookingsContent() {
                           {selectedSlots.map(s => formatSlotDisplay(s)).join(', ')}
                         </span>
                       </div>
+                      {formHasReference && formReferenceName && (
+                        <div className="space-y-0.5 col-span-2 border-t border-border/40 pt-2">
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Reference By</span>
+                          <span className="text-xs font-bold text-primary block">{formReferenceName}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Discount, Additional Amount and Notes */}
